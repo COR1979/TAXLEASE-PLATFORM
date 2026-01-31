@@ -5,82 +5,81 @@ import pandas as pd
 st.set_page_config(page_title="TaxLease Master", layout="wide")
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-st.title("🏛️ Plataforma TaxLease: Optimización y Registro")
+st.title("🏛️ Optimizador Fiscal TaxLease v2.0")
 
-# --- 1. ENTRADA DE DATOS FISCALES ---
-st.header("📊 Análisis de la Operación")
+# --- 1. ENTRADA DE DATOS ---
+st.header("📊 Perfil del Cliente")
 col_in1, col_in2 = st.columns(2)
 
 with col_in1:
-    facturacion = st.number_input("Facturación Anual de la Empresa (€)", min_value=0, value=25000000, step=100000)
-    cuota_is_inicial = st.number_input("Cuota Íntegra IS Inicial (€)", min_value=0, value=100000, step=1000)
+    facturacion = st.number_input("Facturación Anual (€)", min_value=0, value=5000000, step=100000)
+    cuota_is_inicial = st.number_input("Cuota Íntegra IS Inicial (€)", min_value=0, value=36000, step=1000)
 
-# --- 2. LÓGICA DE LÍMITES (GRAN EMPRESA VS PYME) ---
+# --- 2. LÓGICA DE ESCENARIOS ---
 es_gran_empresa = facturacion > 20000000
 
 if es_gran_empresa:
-    limite_pct = 0.15
-    tipo_entidad = "🏢 Gran Empresa (>20M€)"
-    color_msg = "warning"
+    # Caso Único: 15%
+    escenarios = [{"nombre": "Límite Gran Empresa", "pct": 0.15}]
+    st.warning("🏢 Gran Empresa detectada: Límite de deducción fijado en el 15%.")
 else:
-    # Para Pymes, si la inversión es alta se suele llegar al 50%, 
-    # pero aquí fijamos el máximo legal aplicable según tu criterio.
-    limite_pct = 0.50 
-    tipo_entidad = "🏭 Pyme / Resto"
-    color_msg = "info"
-
-st.toast(f"Detectado: {tipo_entidad}")
-
-# Deducción Máxima permitida sobre la cuota
-max_deduccion_posible = cuota_is_inicial * limite_pct
-
-# Inversión Óptima para agotar ese límite (Inversión * 1.20 = Deducción)
-inv_optima = max_deduccion_posible / 1.20
-rentabilidad_esperada = inv_optima * 0.20
-
-with col_in2:
-    st.subheader("Capacidad Máxima de Absorción")
-    st.write(f"**Límite Legal Aplicable:** {limite_pct*100:.0f}% de la Cuota")
-    st.write(f"💰 **Deducción Máxima:** {max_deduccion_posible:,.2f} €")
-    st.success(f"🎯 **Inversión Óptima:** {inv_optima:,.2f} €")
+    # Caso Pyme: Segregación 25% y 50%
+    escenarios = [
+        {"nombre": "Escenario Estándar", "pct": 0.25},
+        {"nombre": "Escenario Intensivo", "pct": 0.50}
+    ]
+    st.info("🏭 Pyme detectada: Mostrando escenarios de absorción al 25% y 50%.")
 
 st.divider()
 
-# --- 3. IMPACTO EN LA CUOTA (EL ANTES Y EL DESPUÉS) ---
-st.header("📉 Impacto Fiscal")
-monto_final = st.slider("Ajustar Inversión Final (€)", 0.0, inv_optima * 1.2, inv_optima)
+# --- 3. CÁLCULO DE OPTIMIZACIÓN ---
+st.header("🔍 Inversión Óptima y Rentabilidad (20%)")
+cols = st.columns(len(escenarios))
 
-deduccion_generada = monto_final * 1.20
-rentabilidad_cliente = monto_final * 0.20
-cuota_final_pagar = cuota_is_inicial - deduccion_generada
+for i, esc in enumerate(escenarios):
+    with cols[i]:
+        techo_deduccion = cuota_is_inicial * esc["pct"]
+        # Inversión + 20% = Techo Deducción
+        inv_optima = techo_deduccion / 1.20
+        beneficio = inv_optima * 0.20
+        
+        st.subheader(f"{esc['nombre']} ({esc['pct']*100:.0f}%)")
+        st.write(f"Deducción Máxima: **{techo_deduccion:,.2f} €**")
+        st.success(f"Inversión a realizar: **{inv_optima:,.2f} €**")
+        st.metric("Beneficio Cliente", f"{beneficio:,.2f} €")
+        
+        # Validación del 10% para el escenario del 50%
+        if esc["pct"] == 0.50:
+            diez_pct_cuota = cuota_is_inicial * 0.10
+            if inv_optima > diez_pct_cuota:
+                st.caption(f"✅ Cumple: Inversión > {diez_pct_cuota:,.2f} € (10% cuota)")
+            else:
+                st.caption(f"⚠️ Nota: Para aplicar el 50%, la inversión debe superar {diez_pct_cuota:,.2f} €")
+
+st.divider()
+
+# --- 4. IMPACTO FINAL Y REGISTRO ---
+st.header("📉 Simulación Final y Registro")
+monto_final = st.number_input("Confirmar Inversión Final Acordada (€)", min_value=0.0, step=500.0)
+
+deduccion_total = monto_final * 1.20
+cuota_final = cuota_is_inicial - deduccion_total
+ahorro_neto = deduccion_total - monto_final
 
 c1, c2, c3 = st.columns(3)
-c1.metric("Inversión Realizada", f"{monto_final:,.2f} €")
-c2.metric("Rentabilidad (20%)", f"{rentabilidad_cliente:,.2f} €", delta="Beneficio Directo")
-c3.metric("Cuota Final IS", f"{cuota_final_pagar:,.2f} €", delta=f"-{deduccion_generada:,.2f} €", delta_color="normal")
+c1.metric("Ahorro Neto Real", f"{ahorro_neto:,.2f} €")
+c2.metric("Cuota IS Post-TaxLease", f"{cuota_final:,.2f} €", delta=f"-{deduccion_total:,.2f} €")
+c3.metric("Eficiencia", f"{(ahorro_neto/monto_final)*100:.1f}%")
 
-st.divider()
-
-# --- 4. REGISTRO EN EXPEDIENTES ---
-st.header("📝 Registro del Expediente")
-with st.form("registro_final"):
-    f1, f2 = st.columns(2)
-    with f1:
-        nombre = st.text_input("Nombre Inversor", value="CRISTOBAL OPROZCO")
-        nif = st.text_input("NIF Inversor")
-    with f2:
-        partner = st.text_input("NIF Partner", value="B61009858")
-        submit = st.form_submit_button("Confirmar y Enviar a EXPEDIENTES")
-
-if submit:
+if st.button("Guardar Expediente en Excel"):
+    # Mapeo a tu pestaña EXPEDIENTES
     nueva_fila = pd.DataFrame([{
-        "ID Expediente": f"EXP-{pd.Timestamp.now().strftime('%d%m%y%H%M')}",
-        "Nombre Inversor": nombre,
+        "ID Expediente": f"EXP-{pd.Timestamp.now().strftime('%d%m%H%M')}",
+        "Nombre Inversor": "Simulación WEB",
         "Importe Inversión": monto_final,
-        "Ahorro Neto": rentabilidad_cliente,
-        "Cuota IS Final": cuota_final_pagar,
-        "Estado": "Validado",
-        "NIF Partner": partner
+        "Ahorro Neto": ahorro_neto,
+        "Estado": "Pendiente",
+        "Facturación": facturacion
     }])
     
     try:
@@ -88,6 +87,6 @@ if submit:
         df_final = pd.concat([df_actual, nueva_fila], ignore_index=True)
         conn.update(worksheet="EXPEDIENTES", data=df_final)
         st.balloons()
-        st.success("✅ ¡Expediente registrado con éxito!")
+        st.success("Sincronizado con éxito.")
     except Exception as e:
-        st.error("Error 401: Revisa que el robot sea EDITOR en el Excel.")
+        st.error("Error de conexión. Revisa los permisos de Editor del robot.")
