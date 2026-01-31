@@ -26,61 +26,34 @@ if perfil == "📊 Calculadora Fiscal":
             cuota_is = st.number_input("Cuota Íntegra IS Estimada (€)", min_value=1, step=1000)
             fecha = st.date_input("Fecha de Simulación")
         
-        submit = st.form_submit_button("Calcular y Registrar en Excel")
+        submit = st.form_submit_button("Calcular y Registrar en EXPEDIENTES")
 
     if submit:
-        # --- LÓGICA LEGAL Y SEGURIDAD ---
-        coef_seguridad = 0.95  # Margen del 5%
+        # LÓGICA DE SEGURIDAD (Margen 5%)
+        ahorro_bruto = import_inv * 0.25
+        ahorro_neto = ahorro_bruto * 0.95
         
-        # 1. Porcentaje de deducción (Regla General 25% I+D)
-        porcentaje_deduc = 25
-        
-        # 2. Límite sobre Cuota (Salto al 50% si inversión > 10% cuota)
-        if import_inv > (cuota_is * 0.10):
-            limite_cuota = 50
-            nota_limite = "Límite incrementado al 50% (Inversión intensiva)"
-        else:
-            limite_cuota = 25
-            nota_limite = "Límite estándar del 25%"
-
-        # 3. Cálculos finales
-        ahorro_bruto = import_inv * (porcentaje_deduc / 100)
-        ahorro_con_seguridad = ahorro_bruto * coef_seguridad
-        
-        # --- MOSTRAR RESULTADOS ---
+        # MOSTRAR RESULTADOS
         st.subheader("Análisis de la Operación")
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Deducción Aplicada", f"{porcentaje_deduc}%")
-        c2.metric("Límite s/ Cuota", f"{limite_cuota}%")
-        c3.metric("Ahorro Neto (Oferta)", f"{ahorro_con_seguridad:,.2f} €", delta="-5% Seguridad")
-        
-        st.info(f"ℹ️ {nota_limite}")
+        c1, c2 = st.columns(2)
+        c1.metric("Deducción Aplicada", "25%")
+        c2.metric("Ahorro Neto (Oferta)", f"{ahorro_neto:,.2f} €", delta="-5% Seguridad")
 
-        # --- SINCRONIZACIÓN ---
+        # SINCRONIZACIÓN CON PESTAÑA 'EXPEDIENTES'
         new_data = pd.DataFrame([{
             "Fecha": str(fecha),
             "Cliente": cliente,
-            "Facturación": facturacion,
             "Inversión": import_inv,
-            "Ahorro Bruto": ahorro_bruto,
-            "Oferta Inversor": ahorro_con_seguridad,
-            "Estado": "Validando"
+            "Ahorro Neto": ahorro_neto,
+            "Estado": "Pendiente de Validar"
         }])
         
         try:
-            df_actual = conn.read(worksheet="Sheet1")
+            # LEEMOS LA PESTAÑA CORRECTA SEGÚN TU IMAGEN
+            df_actual = conn.read(worksheet="EXPEDIENTES") 
             df_final = pd.concat([df_actual, new_data], ignore_index=True)
-            conn.update(worksheet="Sheet1", data=df_final)
+            conn.update(worksheet="EXPEDIENTES", data=df_final)
             st.balloons()
-            st.success("✅ Operación registrada y sincronizada con el panel de control.")
+            st.success("✅ ¡Operación registrada en la pestaña EXPEDIENTES!")
         except Exception as e:
-            st.warning("Cálculo realizado, pero no se pudo escribir en el Excel. ¿Están bien los Secrets?")
-
-# Los otros paneles quedan como placeholders para la siguiente fase
-elif perfil == "💰 Panel Inversores":
-    st.header("💰 Oportunidades para Inversores")
-    st.write("Próximamente: Listado de operaciones validadas listas para inversión.")
-
-elif perfil == "🏢 Área Asesorías":
-    st.header("🏢 Gestión de Despachos")
-    st.write("Próximamente: Histórico de expedientes y documentación.")
+            st.error(f"Error: No se encuentra la pestaña 'EXPEDIENTES' o falta permiso de Editor.")
