@@ -5,47 +5,36 @@ import pandas as pd
 st.set_page_config(page_title="TaxLease Master", layout="wide")
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-st.title("🏛️ Optimizador Fiscal TaxLease")
+st.title("🏛️ Localizador de Pestañas TaxLease")
 
-# --- TEST DE CONEXIÓN DINÁMICO ---
-if st.sidebar.button("🔍 Forzar Reconocimiento de Pestañas"):
+# --- BUSCADOR AUTOMÁTICO DE PESTAÑAS ---
+st.sidebar.header("🔍 Diagnóstico de Hojas")
+if st.sidebar.button("Listar todas las pestañas"):
     try:
-        # Intentamos leer la pestaña directamente por su nombre
-        df_test = conn.read(worksheet="EXPEDIENTES", ttl=0)
-        st.sidebar.success("✅ ¡Localizada! He encontrado 'EXPEDIENTES' en la posición 3.")
+        # Intentamos obtener los nombres de todas las hojas del libro
+        # Nota: Usamos una lectura básica para activar la conexión
+        url = st.secrets["connections"]["gsheets"]["spreadsheet"]
+        st.sidebar.write("Conectando al Excel...")
+        
+        # Leemos la primera hoja por defecto para verificar acceso
+        df_test = conn.read(ttl=0)
+        st.sidebar.success("✅ Conexión establecida con el archivo.")
+        st.sidebar.info("Si no encuentra 'EXPEDIENTES', revisaremos los nombres manuales.")
     except Exception as e:
-        st.sidebar.error("❌ No la encuentro por nombre.")
-        st.sidebar.info("Consejo: Asegúrate de que no haya un espacio después de la S: 'EXPEDIENTES '")
+        st.sidebar.error(f"Error de acceso: {e}")
 
-# --- LÓGICA DE CÁLCULO (La que ya definimos como perfecta) ---
-facturacion = st.number_input("Facturación Anual (€)", min_value=0, value=5000000)
-cuota_is = st.number_input("Cuota Íntegra IS (€)", min_value=0, value=36000)
+# --- FORMULARIO DE PRUEBA ---
+st.header("📊 Prueba de Escritura Directa")
+nombre_pestaña = st.text_input("Escribe el nombre de la pestaña tal cual aparece en tu Excel", value="EXPEDIENTES")
 
-es_gran_empresa = facturacion > 20000000
-# Tu regla: 15% para Grandes Empresas, 50% para Pymes (Escenario máximo)
-limite_pct = 0.15 if es_gran_empresa else 0.50 
-
-techo_deduccion = cuota_is * limite_pct
-inv_optima = techo_deduccion / 1.20
-
-st.metric("Inversión Óptima Sugerida", f"{inv_optima:,.2f} €")
-
-# --- REGISTRO ---
-if st.button("🚀 GRABAR EN EXPEDIENTES"):
-    nueva_fila = pd.DataFrame([{
-        "ID Expediente": f"EXP-{pd.Timestamp.now().strftime('%H%M%S')}",
-        "Nombre Inversor": "PRUEBA POSICION 3",
-        "Importe Inversión": inv_optima,
-        "Estado": "Validado",
-        "NIF Partner": "B61009858"
-    }])
-    
+if st.button("🚀 Intentar grabar en esa pestaña"):
+    nueva_fila = pd.DataFrame([{"ID": "TEST", "Nombre": "VERIFICACIÓN"}])
     try:
-        # TTL=0 obliga a la App a no usar memoria vieja y mirar el Excel real
-        df_actual = conn.read(worksheet="EXPEDIENTES", ttl=0)
-        df_final = pd.concat([df_actual, nueva_fila], ignore_index=True)
-        conn.update(worksheet="EXPEDIENTES", data=df_final)
+        # Intentamos leer la pestaña indicada por el usuario
+        df = conn.read(worksheet=nombre_pestaña, ttl=0)
+        df_final = pd.concat([df, nueva_fila], ignore_index=True)
+        conn.update(worksheet=nombre_pestaña, data=df_final)
         st.balloons()
-        st.success("🎉 ¡LOGRADO! Datos grabados en la tercera pestaña.")
+        st.success(f"¡LOGRADO! He podido escribir en la pestaña '{nombre_pestaña}'.")
     except Exception as e:
-        st.error(f"Fallo crítico: {e}")
+        st.error(f"No se pudo acceder a '{nombre_pestaña}': {e}")
