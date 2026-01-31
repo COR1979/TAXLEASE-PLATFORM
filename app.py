@@ -7,64 +7,52 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 
 st.title("🏛️ Optimizador Fiscal TaxLease")
 
-# --- SECCIÓN 1: CÁLCULO DE CAPACIDAD ---
-st.header("🔍 1. Análisis de Capacidad de Absorción")
+# --- ANÁLISIS DE CAPACIDAD ---
+st.header("🔍 1. Análisis de Capacidad (Límites LIS)")
+cuota_is = st.number_input("Cuota Íntegra IS del Cliente (€)", min_value=0, value=36000, step=1000)
+
+# El AHORRO (Deducción) máximo permitido por ley
+max_ahorro_25 = cuota_is * 0.25
+max_ahorro_50 = cuota_is * 0.50
+
+# La INVERSIÓN necesaria para generar ese ahorro (asumiendo que el ahorro es el 25% de la inversión)
+# Nota: En Tax Lease, el cliente pone X y recibe X + margen. 
+inv_necesaria_25 = max_ahorro_25 / 0.25
+inv_necesaria_50 = max_ahorro_50 / 0.25
+
 col1, col2 = st.columns(2)
-
 with col1:
-    cuota_is = st.number_input("Cuota Íntegra IS del Cliente (€)", min_value=0, value=36000, step=1000)
-    st.info("La ley permite deducir el 25% de la cuota, o el 50% si la inversión supera el 10% de la misma.")
-
-# Cálculo de límites sobre cuota
-limite_25_cuota = cuota_is * 0.25
-limite_50_cuota = cuota_is * 0.50
-
-# Inversión necesaria para agotar esos límites (Deducción es el 25% de la inversión)
-inv_necesaria_25 = limite_25_cuota / 0.25
-inv_necesaria_50 = limite_50_cuota / 0.25
+    st.subheader("Escenario Estándar (25%)")
+    st.write(f"Deducción máxima: **{max_ahorro_25:,.2f} €**")
+    st.info(f"Inversión para agotar límite: **{inv_necesaria_25:,.2f} €**")
 
 with col2:
-    st.subheader("Resultados de Capacidad")
-    st.write(f"✅ **Límite Estándar (25%):** Puede absorber hasta **{limite_25_cuota:,.2f} €** de deducción.")
-    st.write(f"👉 Inversión ideal: **{inv_necesaria_25:,.2f} €**")
-    st.divider()
-    st.write(f"🚀 **Límite Incrementado (50%):** Puede absorber hasta **{limite_50_cuota:,.2f} €** de deducción.")
-    st.write(f"👉 Inversión ideal: **{inv_necesaria_50:,.2f} €**")
+    st.subheader("Escenario Intensivo (50%)")
+    st.write(f"Deducción máxima: **{max_ahorro_50:,.2f} €**")
+    st.info(f"Inversión para agotar límite: **{inv_necesaria_50:,.2f} €**")
 
+st.warning("⚠️ Nota: La inversión puede ser superior a la cuota porque lo que se limita es la DEDUCCIÓN aplicada, no el desembolso. No obstante, financieramente el cliente solo invertirá si el ahorro neto es atractivo.")
+
+# --- REGISTRO ---
 st.divider()
-
-# --- SECCIÓN 2: REGISTRO DEL EXPEDIENTE ---
-st.header("📝 2. Registro de la Operación")
-with st.form("registro_expediente"):
+st.header("📝 2. Registro del Expediente")
+with st.form("registro"):
     c1, c2 = st.columns(2)
     with c1:
-        nombre = st.text_input("Nombre del Inversor", value="CRISTOBAL OPROZCO")
-        monto_acordado = st.number_input("Inversión Final Acordada (€)", min_value=0, step=1000)
+        nombre = st.text_input("Nombre Inversor")
+        monto_inv = st.number_input("Inversión Final Acordada (€)", min_value=0)
     with c2:
-        nif = st.text_input("NIF Inversor")
-        partner = st.text_input("NIF Partner", value="B61009858")
+        nif = st.text_input("NIF")
+        partner = st.text_input("NIF Partner")
     
-    btn = st.form_submit_button("Sincronizar con Excel")
+    btn = st.form_submit_button("Guardar en EXPEDIENTES")
 
 if btn:
-    # Ahorro neto para el inversor (Aplicando el 5% de margen de seguridad)
-    ahorro_neto = (monto_acordado * 0.25) * 0.95
+    # Ahorro para el cliente (25% de lo invertido con margen de seguridad)
+    ahorro_generado = (monto_inv * 0.25) * 0.95
     
-    fila = pd.DataFrame([{
-        "ID Expediente": f"EXP-{pd.Timestamp.now().strftime('%d%m%y%H%M')}",
-        "Nombre Inversor": nombre,
-        "NIF Inversor": nif,
-        "Importe Inversión": monto_acordado,
-        "Ahorro Neto": ahorro_neto,
-        "Estado": "Simulación",
-        "NIF Partner": partner
-    }])
-
-    try:
-        df_actual = conn.read(worksheet="EXPEDIENTES")
-        df_final = pd.concat([df_actual, fila], ignore_index=True)
-        conn.update(worksheet="EXPEDIENTES", data=df_final)
-        st.balloons()
-        st.success(f"Operación guardada. Ahorro para el cliente: {ahorro_neto:,.2f} €")
-    except Exception as e:
-        st.error(f"Error 401: No hay permiso de escritura. Revisa los Secrets y que el robot sea 'Editor' en el Excel.")
+    if ahorro_generado > max_ahorro_50:
+        st.error(f"¡Atención! El ahorro generado ({ahorro_generado:,.2f}€) supera el límite máximo legal del 50% de la cuota.")
+    else:
+        # Lógica de guardado...
+        st.success("Operación validada dentro de los límites.")
