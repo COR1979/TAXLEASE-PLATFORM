@@ -1,15 +1,15 @@
 import streamlit as st
 
-# Configuración de la página
+# 1. Configuración básica
 st.set_page_config(page_title="TaxLease Platform", layout="wide")
 
 st.title("🏛️ TaxLease Platform-Manager")
 
-# Menú lateral
+# 2. Menú lateral
 menu = ["📊 Calculadora Fiscal", "🤝 Partners"]
-choice = st.sidebar.selectbox("Selecciona sección:", menu)
+choice = st.sidebar.selectbox("Ir a:", menu)
 
-# --- SECCIÓN 1: CALCULADORA (Independiente) ---
+# --- SECCIÓN 1: CALCULADORA (Funciona siempre, no depende del Excel) ---
 if choice == "📊 Calculadora Fiscal":
     st.header("🧮 Calculadora de Impacto Fiscal")
     
@@ -24,30 +24,31 @@ if choice == "📊 Calculadora Fiscal":
     inv_optima = capacidad / 1.20
 
     with col2:
-        st.metric("Límite Fiscal", f"{limite*100:.0f}% de la cuota")
-        st.success(f"Inversión Óptima sugerida: {inv_optima:,.2f} €")
+        st.metric("Límite Fiscal", f"{limite*100:.0f}%")
+        st.success(f"Inversión Óptima Sugerida: {inv_optima:,.2f} €")
 
     st.divider()
     
-    st.subheader("Simulador de Operación Real")
-    propuesta = st.number_input("Introduce Importe de la Inversión (€)", value=float(inv_optima))
+    st.subheader("Simulador de Propuesta Real")
+    propuesta = st.number_input("Importe de la Inversión Real (€)", value=float(inv_optima))
     
-    ahorro = propuesta * 0.20
+    # Cálculos basados en la propuesta
     deduccion = propuesta * 1.20
+    ahorro = propuesta * 0.20
     
     c1, c2, c3 = st.columns(3)
-    c1.metric("Deducción Generada (120%)", f"{deduccion:,.2f} €")
+    c1.metric("Deducción (120%)", f"{deduccion:,.2f} €")
     c2.metric("Ahorro Neto (20%)", f"{ahorro:,.2f} €")
     c3.metric("Cuota Final IS", f"{cuota - deduccion:,.2f} €", delta=f"-{deduccion:,.2f} €")
 
-# --- SECCIÓN 2: PARTNERS (Conexión Excel) ---
+# --- SECCIÓN 2: PARTNERS (Conexión con Google Sheets) ---
 elif choice == "🤝 Partners":
-    st.header("Consulta de Partners")
+    st.header("Base de Datos de Partners")
     try:
         from streamlit_gsheets import GSheetsConnection
         conn = st.connection("gsheets", type=GSheetsConnection)
         df = conn.read(worksheet="PARTNERS", ttl=0)
         st.dataframe(df, use_container_width=True)
     except Exception as e:
-        st.error("⚠️ No se pudo conectar con el Excel.")
-        st.info("Esto suele pasar si los 'Secrets' en Streamlit Cloud se han movido o borrado.")
+        st.error(f"⚠️ Error al conectar con el Excel: {e}")
+        st.info("Revisa si tus 'Secrets' en Streamlit Cloud siguen configurados correctamente.")
