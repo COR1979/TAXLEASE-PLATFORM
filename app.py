@@ -1,72 +1,81 @@
 import streamlit as st
-from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime
 
-st.set_page_config(page_title="TaxLease Platform v3.0", layout="wide")
-
-# Intentar conexión con diagnóstico
-try:
-    conn = st.connection("gsheets", type=GSheetsConnection)
-except Exception as e:
-    st.error("⚠️ Error en la configuración de Secrets. Revisa el JSON.")
-    st.stop()
+st.set_page_config(page_title="TaxLease Platform v4.0", layout="wide")
 
 st.title("🏛️ TaxLease Platform-Manager")
 
-menu = ["🤝 Partners", "💰 Inversores", "🚀 Nueva Operación"]
+# --- MENÚ LATERAL ---
+menu = ["📊 Calculadora Fiscal", "🤝 Partners", "💰 Inversores", "🚀 Nueva Operación"]
 choice = st.sidebar.selectbox("Menú de Gestión", menu)
 
-if choice == "🤝 Partners":
-    st.header("Gestión de Partners (JV 50%)")
+# ==========================================
+# SECCIÓN: CALCULADORA DE AHORRO FISCAL
+# ==========================================
+if choice == "📊 Calculadora Fiscal":
+    st.header("🧮 Calculadora de Impacto Fiscal (Tax Lease)")
+    st.info("Utiliza esta herramienta para determinar la inversión óptima de un cliente.")
+
+    # --- ENTRADA DE DATOS ---
+    col1, col2 = st.columns(2)
     
-    with st.form("alta_partner"):
-        # Dividimos en columnas para que el formulario no sea tan largo
-        col1, col2 = st.columns(2)
+    with col1:
+        st.subheader("Datos del Cliente")
+        facturacion = st.number_input("Facturación Anual de la Empresa (€)", min_value=0, value=25000000, step=1000000)
+        cuota_is_inicial = st.number_input("Cuota Íntegra IS Inicial (€)", min_value=0, value=100000, step=10000)
         
-        with col1:
-            nif = st.text_input("NIF del Partner (ID Único)")
-            nombre = st.text_input("Nombre / Razón Social")
-            contacto = st.text_input("Persona de Contacto")
+        # Lógica de Límites Fiscales
+        es_gran_empresa = facturacion > 20000000
+        limite_pct = 0.15 if es_gran_empresa else 0.50
+        tipo_empresa = "Grande Empresa (>20M€)" if es_gran_empresa else "Pyme / Resto"
+
+    # --- CÁLCULOS INTERNOS ---
+    max_deduccion_posible = cuota_is_inicial * limite_pct
+    # Inversión Óptima para agotar el cupo (Rentabilidad 20% fija)
+    inv_optima = max_deduccion_posible / 1.20
+    rentabilidad_esperada = inv_optima * 0.20
+
+    with col2:
+        st.subheader("Diagnóstico de Capacidad")
+        st.write(f"**Perfil:** {tipo_empresa}")
+        st.write(f"**Límite Legal:** {limite_pct*100:.0f}% de la cuota íntegra.")
         
-        with col2:
-            email = st.text_input("Email")
-            telefono = st.text_input("Teléfono")
-            domicilio = st.text_input("Domicilio Social")
-        
-        comision = st.number_input("Comisión %", value=50)
-        
-        if st.form_submit_button("Dar de Alta Partner"):
-            if not nif or not nombre:
-                st.warning("⚠️ El NIF y el Nombre son obligatorios.")
-            else:
-                try:
-                    # 1. LEER DATOS EXISTENTES (TTL=0 para que siempre sea real)
-                    df_existente = conn.read(worksheet="PARTNERS", ttl=0)
-                    
-                    # 2. CREAR LA NUEVA FILA (Orden exacto de tu Excel)
-                    # Nota: He añadido "" para la columna G que tienes vacía
-                    nueva_fila = pd.DataFrame([{
-                        "NIF": nif,
-                        "Nombre Partner": nombre,
-                        "Persona de Contacto": contacto,
-                        "Email": email,
-                        "Teléfono": telefono,
-                        "Domicilio Social": domicilio,
-                        " ": "",  # Esta es tu columna G vacía
-                        "Comisión %": comision,
-                        "Fecha Alta": datetime.now().strftime("%d/%m/%Y"),
-                        "Enlace JV": "" # Columna J
-                    }])
-                    
-                    # 3. UNIR Y ACTUALIZAR
-                    # Usamos concat para poner la nueva fila al final sin borrar las anteriores
-                    df_final = pd.concat([df_existente, nueva_fila], ignore_index=True)
-                    
-                    conn.update(worksheet="PARTNERS", data=df_final)
-                    
-                    st.balloons()
-                    st.success(f"✅ Partner '{nombre}' guardado. Los datos anteriores se han mantenido.")
-                    
-                except Exception as e:
-                    st.error(f"❌ Error al conectar con el Excel: {e}")
+        st.metric("Deducción Máxima", f"{max_deduccion_posible:,.2f} €")
+        st.success(f"🎯 **Inversión Óptima Sugerida:** {inv_optima:,.2f} €")
+
+    st.divider()
+
+    # --- SIMULADOR DE IMPACTO ---
+    st.subheader("📉 Simulador de Impacto Final")
+    
+    # Slider para que el usuario pueda ajustar el importe real que el cliente quiere invertir
+    monto_final = st.slider("Ajustar Inversión Real (€)", 0.0, float(inv_optima * 1.5), float(inv_optima))
+    
+    # Resultados del simulador
+    deduccion_generada = monto_final * 1.20
+    ahorro_neto_cliente = monto_final * 0.20
+    cuota_final_pagar = cuota_is_inicial - deduccion_generada
+
+    # Asegurar que la cuota no sea negativa (solo a efectos visuales)
+    cuota_final_pagar = max(0.0, cuota_final_pagar)
+
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.metric("Deducción Generada", f"{deduccion_generada:,.2f} €")
+    with c2:
+        st.metric("Ahorro Neto (Beneficio)", f"{ahorro_neto_cliente:,.2f} €", delta="20% neto")
+    with c3:
+        st.metric("Nueva Cuota a Pagar", f"{cuota_final_pagar:,.2f} €", delta=f"-{deduccion_generada:,.2f} €", delta_color="normal")
+
+    # --- MENSAJE COMERCIAL ---
+    if cuota_final_pagar < (cuota_is_inicial * 0.5):
+        st.warning("⚠️ Atención: La inversión supera el límite estándar de deducción. Revisar con fiscalista.")
+
+# ==========================================
+# RESTO DE SECCIONES (Partners, Inversores...)
+# ==========================================
+elif choice == "🤝 Partners":
+    st.header("Gestión de Partners")
+    st.write("Consulta tus datos directamente en el Excel.")
+    # (Aquí va tu código de visualización de Partners)
