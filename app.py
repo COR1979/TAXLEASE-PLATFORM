@@ -1,48 +1,68 @@
-# --- LÓGICA MEJORADA ---
+import streamlit as st
+import pandas as pd
+from datetime import datetime
 
-st.header("🧮 Simulador de Inversión Tax Lease")
+# Intentamos importar las librerías de Google, si fallan, la App avisará
+try:
+    from googleapiclient.discovery import build
+    from google.oauth2 import service_account
+    GOOGLE_LIBS_READY = True
+except ImportError:
+    GOOGLE_LIBS_READY = False
 
-# 1. CÁLCULO DE CAPACIDAD (Límite Legal)
-st.subheader("Paso 1: Capacidad Fiscal del Cliente")
-col_cap1, col_cap2 = st.columns(2)
+st.set_page_config(page_title="TaxLease Platform v4.0", layout="wide")
 
-with col_cap1:
-    cuota_is = st.number_input("Cuota Íntegra IS (€)", value=100000)
-    facturacion = st.number_input("Facturación Anual (€)", value=25000000)
+st.title("🏛️ TaxLease Platform-Manager")
+
+# --- MENÚ LATERAL ---
+menu = ["📊 Calculadora Fiscal", "🤝 Partners", "💰 Inversores"]
+choice = st.sidebar.selectbox("Menú de Gestión", menu)
+
+# ==========================================
+# SECCIÓN: CALCULADORA FISCAL
+# ==========================================
+if choice == "📊 Calculadora Fiscal":
+    st.header("🧮 Calculadora de Impacto Fiscal")
     
+    col1, col2 = st.columns(2)
+    with col1:
+        cuota_is = st.number_input("Cuota Íntegra IS Inicial (€)", value=100000)
+        facturacion = st.number_input("Facturación Anual (€)", value=25000000)
+    
+    # Lógica de límites
     limite_pct = 0.15 if facturacion > 20000000 else 0.50
     capacidad_deduccion = cuota_is * limite_pct
-    # Inversión necesaria para agotar ese límite
-    inv_maxima_legal = capacidad_deduccion / 1.20
+    inv_optima = capacidad_deduccion / 1.20
 
-with col_cap2:
-    st.info(f"**Límite Legal:** {limite_pct*100:.0f}% de la cuota.")
-    st.metric("Deducción Máxima posible", f"{capacidad_deduccion:,.2f} €")
-    st.success(f"Techo de Inversión: {inv_maxima_legal:,.2f} €")
+    with col2:
+        st.metric("Límite de Deducción", f"{limite_pct*100:.0f}%")
+        st.success(f"🎯 Inversión Óptima Sugerida: {inv_optima:,.2f} €")
 
-st.divider()
+    st.divider()
+    
+    st.subheader("Simulador de Propuesta")
+    inv_propuesta = st.number_input("Importe de la Inversión Real (€)", value=float(inv_optima))
+    
+    ahorro_neto = inv_propuesta * 0.20
+    deduccion_total = inv_propuesta * 1.20
+    
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Deducción Generada", f"{deduccion_total:,.2f} €")
+    c2.metric("Ahorro Neto (20%)", f"{ahorro_neto:,.2f} €")
+    c3.metric("Cuota Final IS", f"{cuota_is - deduccion_total:,.2f} €")
 
-# 2. INTRODUCCIÓN DE LA PROPUESTA (Lo que realmente se va a firmar)
-st.subheader("Paso 2: Inversión Propuesta")
-inv_propuesta = st.number_input("Introduce el importe de la Propuesta Real (€)", 
-                                min_value=0.0, 
-                                max_value=float(inv_maxima_legal * 2), # Permitimos superar el límite para avisar
-                                value=float(inv_maxima_legal))
+# ==========================================
+# SECCIÓN: PARTNERS (SOLO LECTURA)
+# ==========================================
+elif choice == "🤝 Partners":
+    st.header("Lista de Partners (desde Excel)")
+    try:
+        from streamlit_gsheets import GSheetsConnection
+        conn = st.connection("gsheets", type=GSheetsConnection)
+        df = conn.read(worksheet="PARTNERS", ttl=0)
+        st.dataframe(df)
+    except Exception as e:
+        st.error(f"Error al conectar con Excel: {e}")
 
-# 3. RESULTADO REAL DE LA PROPUESTA
-st.subheader("Paso 3: Resultado de la Operación")
-
-deduccion_real = inv_propuesta * 1.20
-ahorro_neto = inv_propuesta * 0.20
-exceso_limite = max(0.0, deduccion_real - capacidad_deduccion)
-
-c1, c2, c3 = st.columns(3)
-c1.metric("Deducción Generada", f"{deduccion_real:,.2f} €")
-c2.metric("Ahorro Neto (Beneficio)", f"{ahorro_neto:,.2f} €")
-
-if exceso_limite > 0:
-    c3.metric("⚠️ Exceso no deducible", f"{exceso_limite:,.2f} €", delta_color="inverse")
-    st.error(f"Ojo: La propuesta supera la capacidad fiscal del cliente en {exceso_limite:,.2f} €. Tendrá que aplicar el exceso en años siguientes.")
-else:
-    c3.metric("Cuota IS Final", f"{cuota_is - deduccion_real:,.2f} €")
-    st.balloons()
+if not GOOGLE_LIBS_READY:
+    st.warning("⚠️ Nota: Las librerías para generar contratos no están instaladas en requirements.txt.")
