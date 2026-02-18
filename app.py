@@ -1,7 +1,8 @@
 import streamlit as st
+import pandas as pd
 
 # 1. Configuración de la página
-st.set_page_config(page_title="TaxLease Platform v5.0", layout="wide")
+st.set_page_config(page_title="TaxLease Platform v6.0", layout="wide")
 
 st.title("🏛️ TaxLease Platform-Manager")
 
@@ -13,10 +14,11 @@ choice = st.sidebar.selectbox("Selecciona sección:", menu)
 if choice == "📊 Calculadora y Análisis":
     st.header("🧮 Análisis de Inversión y Rentabilidad")
     
-    # Bloque 1: Capacidad Fiscal (El Techo)
-    with st.expander("1. Capacidad Fiscal del Cliente (Límites Legales)", expanded=True):
+    # Bloque 1: Capacidad Fiscal
+    with st.expander("1. Capacidad Fiscal del Cliente", expanded=True):
         c1, c2 = st.columns(2)
         with c1:
+            nombre_cliente = st.text_input("Nombre del Cliente/Empresa", value="Empresa Ejemplo S.L.")
             cuota = st.number_input("Cuota Íntegra IS Inicial (€)", value=100000, step=5000)
             facturacion = st.number_input("Facturación Anual (€)", value=25000000, step=1000000)
         
@@ -41,30 +43,65 @@ if choice == "📊 Calculadora y Análisis":
     with col_real2:
         diferencia = inv_optima - inv_real
         if diferencia > 0:
-            st.warning(f"Diferencia: Faltan {diferencia:,.2f} € para agotar el cupo fiscal.")
+            st.warning(f"Diferencia: Faltan {diferencia:,.2f} € para agotar el cupo.")
         elif diferencia < 0:
-            st.error(f"Exceso: Supera el límite legal en {abs(diferencia):,.2f} €.")
+            st.error(f"Exceso: Supera el límite en {abs(diferencia):,.2f} €.")
         else:
-            st.info("La inversión coincide exactamente con el cupo máximo.")
+            st.info("Inversión ajustada al cupo máximo.")
 
     st.divider()
 
     # Bloque 3: Rendimiento Financiero
     st.subheader("3. Rendimiento y Rentabilidad Real")
-    
-    # Cálculos financieros
     ahorro_neto = inv_real * 0.20
     rent_mensual = 20.0 / meses
     tae_equivalente = rent_mensual * 12
 
     m1, m2, m3 = st.columns(3)
-    m1.metric("Beneficio Neto", f"{ahorro_neto:,.2f} €", "20% fijo")
+    m1.metric("Beneficio Neto", f"{ahorro_neto:,.2f} €")
     m2.metric("Rentabilidad Mensual", f"{rent_mensual:.2f} %")
-    m3.metric("TAE (Anualizado)", f"{tae_equivalente:.2f} %", delta="Rendimiento Financiero")
+    m3.metric("TAE (Anualizado)", f"{tae_equivalente:.2f} %")
 
-    st.caption(f"Análisis: El capital de {inv_real:,.2f} € genera un retorno total de {inv_real + ahorro_neto:,.2f} € en solo {meses} meses.")
+    # --- BOTÓN DE INFORME ---
+    st.divider()
+    if st.button("📄 Generar Informe Ejecutivo"):
+        # Creamos el texto del informe
+        texto_informe = f"""
+        INFORME EJECUTIVO DE INVERSIÓN FISCAL (TAX LEASE)
+        ------------------------------------------------
+        CLIENTE: {nombre_cliente}
+        FECHA: {pd.Timestamp.now().strftime('%d/%m/%Y')}
+        
+        1. ANÁLISIS DE CAPACIDAD FISCAL
+        - Cuota Íntegra declarada: {cuota:,.2f} €
+        - Límite legal aplicable: {limite*100:.0f}%
+        - Capacidad máxima de deducción: {capacidad_max:,.2f} €
+        - Inversión óptima para cupo: {inv_optima:,.2f} €
+        
+        2. DETALLE DE LA OPERACIÓN PROPUESTA
+        - Importe de la inversión: {inv_real:,.2f} €
+        - Ahorro fiscal generado (120%): {inv_real * 1.2:,.2f} €
+        - Plazo estimado de recuperación: {meses} meses
+        
+        3. RENDIMIENTO FINANCIERO
+        - Beneficio neto directo: {ahorro_neto:,.2f} € (20% sobre capital)
+        - Rentabilidad mensual: {rent_mensual:.2f}%
+        - Rentabilidad anualizada (TAE): {tae_equivalente:.2f}%
+        
+        Este análisis se basa en el Art. 39.7 de la LIS. 
+        Inversión garantizada mediante Seguro de Contingencia Fiscal.
+        """
+        
+        st.text_area("Vista previa del Informe (puedes copiarlo):", texto_informe, height=300)
+        
+        st.download_button(
+            label="📥 Descargar Informe como .txt",
+            data=texto_informe,
+            file_name=f"Informe_TaxLease_{nombre_cliente.replace(' ', '_')}.txt",
+            mime="text/plain"
+        )
 
-# --- SECCIÓN 2: PARTNERS (Conexión protegida) ---
+# --- SECCIÓN 2: PARTNERS ---
 elif choice == "🤝 Partners":
     st.header("Consulta de Partners")
     try:
@@ -73,4 +110,4 @@ elif choice == "🤝 Partners":
         df = conn.read(worksheet="PARTNERS", ttl=0)
         st.dataframe(df, use_container_width=True)
     except Exception as e:
-        st.error("⚠️ No se pudo conectar con el Excel. La calculadora sigue operativa.")
+        st.error("⚠️ Error de conexión con el Excel.")
