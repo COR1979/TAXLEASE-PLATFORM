@@ -3,10 +3,10 @@ import pandas as pd
 from streamlit_gsheets import GSheetsConnection
 
 # 1. CONFIGURACIÓN
-st.set_page_config(page_title="Dertogest Platform v1.5", layout="wide")
+st.set_page_config(page_title="Dertogest Platform v1.6", layout="wide")
 st.title("🏛️ Dertogest: Gestión de Incentivos Fiscales")
 
-# 2. CONEXIÓN
+# 2. CONEXIÓN (ttl=0 para evitar errores de caché al modificar el Excel)
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
 except Exception as e:
@@ -32,16 +32,18 @@ if choice == "📊 Calculadora Fiscal":
 elif choice == "🤝 Partners (JV)":
     st.header("Gestión de Partners")
     try:
-        df = conn.read(worksheet="PARTNERS")
+        # Leemos y limpiamos nombres de columnas para evitar KeyErrors
+        df = conn.read(worksheet="PARTNERS", ttl=0)
+        df.columns = df.columns.str.strip() 
         st.dataframe(df)
         
         st.subheader("📝 Generar Contrato de Colaboración (JV)")
         
-        # MAPEO EXACTO DE COLUMNAS SEGÚN TU EXCEL
+        # Mapeo exacto basado en tus capturas
         col_id = "NIF (ID único)"
         col_nombre = "Nombre Partner (Razón Social)"
         col_dom = "Domicilio Social"
-        col_rep = "Representante Legal" # <--- Corregido según tu última imagen
+        col_rep = "Representante Legal" 
 
         nif_sel = st.selectbox("Selecciona Partner por NIF", df[col_id].tolist())
         d = df[df[col_id] == nif_sel].iloc[0]
@@ -58,21 +60,24 @@ De otra parte, {d[col_nombre]}, con NIF {d[col_id]} y domicilio en {d[col_dom]},
 EXPONEN:
 I. Que el SOCIO TÉCNICO cuenta con el conocimiento e infraestructura para gestionar activos de inversión fiscal basados en el Art. 39.7 de la LIS (Tax Lease).
 II. Que el SOCIO COMERCIAL cuenta con una cartera de clientes susceptibles de optimizar su carga tributaria mediante dichos activos.
+III. Que ambas partes desean colaborar bajo un modelo de transparencia total y beneficio compartido.
 
 CLÁUSULAS:
-PRIMERA. OBJETO. Gestión de inversiones en proyectos de I+D+i y Cultura.
-SEGUNDA. DIVISIÓN DE FUNCIONES. DERTOGEST asume la parte técnica y financiera; el SOCIO COMERCIAL la identificación y gestión del inversor.
-TERCERA. MODELO ECONÓMICO. Reparto al 50% de los rendimientos brutos sobre Base Imponible (+ IVA).
-CUARTA. LIQUIDACIÓN. Pago al SOCIO COMERCIAL en un máximo de 10 días tras el cobro efectivo por parte de DERTOGEST.
-QUINTA. GARANTÍAS TÉCNICAS. Certificación oficial (ICAA, INAEM) y Póliza de Seguro de Contingencia Fiscal.
+PRIMERA. OBJETO. Regular la colaboración para la captación de inversores y la formalización de contratos de financiación en proyectos de I+D+i y Cultura.
+SEGUNDA. DIVISIÓN DE FUNCIONES. 
+- SOCIO TÉCNICO (DERTOGEST): Búsqueda, auditoría técnica y financiera, interlocución con plataformas y preparación legal.
+- SOCIO COMERCIAL: Identificación de clientes, cálculo de cuota íntegra, presentación comercial y gestión de firmas.
+TERCERA. MODELO ECONÓMICO Y IVA. Reparto al 50% de rendimientos brutos (Comisión de Origen, Setup y Success Fee). Importes en Base Imponible + IVA vigente.
+CUARTA. TRANSPARENCIA Y LIQUIDACIÓN. Pago al SOCIO COMERCIAL en un máximo de 10 días tras el cobro por parte de DERTOGEST.
+QUINTA. GARANTÍAS TÉCNICAS. Operación con Certificación oficial (ICAA, INAEM) y Póliza de Seguro de Contingencia Fiscal.
 
 SEXTA. CONFIDENCIALIDAD, PROPIEDAD Y NO CIRCUNVENCIÓN.
-1. PROPIEDAD DE CARTERA: DERTOGEST reconoce la propiedad exclusiva de los clientes por parte del SOCIO COMERCIAL y se compromete formalmente a NO ofrecerles servicios de asesoría general ni cualquier gestión ajena al presente contrato de Tax Lease.
-2. NO CIRCUNVENCIÓN: El SOCIO COMERCIAL no contactará directamente con las plataformas presentadas por DERTOGEST durante la vigencia y 2 años posteriores.
+1. Propiedad de Cartera: DERTOGEST reconoce la propiedad exclusiva de los clientes por parte del SOCIO COMERCIAL y se compromete formalmente a NO ofrecerles servicios de asesoría general ni cualquier gestión ajena al presente contrato de Tax Lease.
+2. No Circunvención: El SOCIO COMERCIAL no contactará directamente con las plataformas presentadas por DERTOGEST durante la vigencia y 2 años posteriores.
 
-SÉPTIMA. RGPD. Cumplimiento del Reglamento (UE) 2016/679.
-OCTAVA. DURACIÓN. Un año prorrogable automáticamente.
-NOVENA. FIRMA DIGITAL. Formalización mediante firma digital avanzada.
+SÉPTIMA. PROTECCIÓN DE DATOS (RGPD). Cumplimiento del Reglamento (UE) 2016/679.
+OCTAVA. DURACIÓN. Un año prorrogable automáticamente, salvo preaviso de 30 días.
+NOVENA. FIRMA DIGITAL. Formalización mediante firma digital avanzada con plena validez.
 """
             st.text_area("Contrato listo para copiar:", contrato_full, height=600)
             st.download_button("📥 Descargar Contrato .txt", contrato_full, file_name=f"JV_{d[col_id]}.txt")
@@ -84,15 +89,16 @@ NOVENA. FIRMA DIGITAL. Formalización mediante firma digital avanzada.
 elif choice == "💰 Inversores":
     st.header("Gestión de Inversores")
     try:
-        df_i = conn.read(worksheet="INVERSORES")
+        df_i = conn.read(worksheet="INVERSORES", ttl=0)
+        df_i.columns = df_i.columns.str.strip()
         st.dataframe(df_i)
         
         st.subheader("📝 Generar Contrato de Encargo")
-        nif_inv = st.selectbox("Selecciona Inversor por NIF", df_i.iloc[:, 0].tolist())
+        nif_inv = st.selectbox("Inversor (NIF)", df_i.iloc[:, 0].tolist())
         di = df_i[df_i.iloc[:, 0] == nif_inv].iloc[0]
 
         if st.button("Generar Texto de Encargo"):
-            # Asumiendo que el representante está en la columna 4 del Excel de Inversores
+            # Usamos índices si los nombres de columna varían en Inversores
             rep_inv = di[3] if len(di) > 3 else "[Nombre Representante]"
             
             encargo_full = f"""
@@ -101,11 +107,12 @@ CONTRATO DE ENCARGO DE GESTIÓN E INVERSIÓN FISCAL
 REUNIDOS: DERTOGEST, S.L. (GESTOR), y de otra parte, {di[1]}, con NIF {di[0]}, representada por D./Dña. {rep_inv} (CLIENTE).
 
 CLÁUSULAS:
-PRIMERA. OBJETO. Localización de activos con rentabilidad neta garantizada del 20%.
-SEGUNDA. HONORARIOS. 300 € (Apertura) + 4% Success Fee (Netos + IVA). Los 300€ se descuentan de la factura final.
-TERCERA. PAGO. Coincidiendo con el periodo de liquidación de impuestos (Junio/Julio).
-CUARTA. GARANTÍA. Devolución de los 300 € si no se presenta propuesta viable.
-QUINTA. RGPD. Tratamiento de datos exclusivo para la inversión fiscal.
+PRIMERA. OBJETO. Localización de activos con rentabilidad neta del 20% sobre aportación.
+SEGUNDA. HONORARIOS. Apertura: 300 € (Netos + IVA), descontables de la factura final. Success Fee: 4% (Neto + IVA).
+TERCERA. PAGO. Coincidiendo con liquidación de impuestos (30 junio o 25 julio).
+CUARTA. GARANTÍA. Devolución de los 300 € si no se presenta propuesta viable (sin intereses).
+QUINTA. PROTECCIÓN DE DATOS. Procesamiento exclusivo para formalizar la inversión.
+SEXTA. FIRMA. Formalización mediante firma digital avanzada.
 """
             st.text_area("Contrato de Encargo:", encargo_full, height=500)
     except Exception as e:
