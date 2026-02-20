@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from streamlit_gsheets import GSheetsConnection
 
-# 1. CARGA DE LIBRERÍA DE IA (Con manejo de errores)
+# 1. CARGA DE IA (Con sistema de diagnóstico)
 IA_ACTIVA = False
 try:
     import google.generativeai as genai
@@ -11,34 +11,33 @@ except ImportError:
     pass
 
 # 2. CONFIGURACIÓN DE PÁGINA
-st.set_page_config(page_title="Dertogest AI Hub v3.1", layout="wide")
+st.set_page_config(page_title="Dertogest AI Platform v3.2", layout="wide")
 st.title("🏛️ Dertogest: Gestión & Inteligencia Fiscal")
 
-# 3. FUNCIÓN DE DATOS SEGURA (Limpia espacios invisibles en columnas)
-def cargar_datos_seguros(hoja):
+# 3. FUNCIÓN DE DATOS SEGURA
+def cargar_datos_limpios(hoja):
     try:
         conn = st.connection("gsheets", type=GSheetsConnection)
         df = conn.read(worksheet=hoja, ttl=0)
-        # ESCUDO: Limpia nombres de columnas para evitar fallos como en image_d20fc9
+        # ESCUDO: Limpia nombres de columnas para evitar fallos de 'Representante Legal'
         df.columns = df.columns.str.strip()
         return df
     except Exception as e:
         st.error(f"Error al conectar con la pestaña '{hoja}': {e}")
         return None
 
-# 4. CONFIGURAR IA (Corrección para el error 404 de image_d43f9b)
+# 4. CONFIGURAR IA (Con prevención de error 404)
 model = None
 if IA_ACTIVA and "GOOGLE_API_KEY" in st.secrets:
     try:
         genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
-        # Intentamos instanciar el modelo directamente
         model = genai.GenerativeModel('gemini-1.5-flash')
     except Exception:
         IA_ACTIVA = False
 
 # 5. MENÚ LATERAL
 menu = ["📊 Calculadora Fiscal", "🤝 Partners (JV)", "💰 Inversores", "🤖 Asesor IA Fiscal"]
-choice = st.sidebar.selectbox("Navegación", menu)
+choice = st.sidebar.selectbox("Navegación Principal", menu)
 
 # --- SECCIÓN 1: CALCULADORA ---
 if choice == "📊 Calculadora Fiscal":
@@ -54,17 +53,17 @@ if choice == "📊 Calculadora Fiscal":
         st.success(f"Inversión Óptima Sugerida: {inv_opt:,.2f} €")
         st.info(f"Ahorro Neto Directo (20%): {inv_opt * 0.20:,.2f} €")
 
-# --- SECCIÓN 2: PARTNERS (TEXTO LEGAL ÍNTEGRO) ---
+# --- SECCIÓN 2: PARTNERS (CONTRATO ÍNTEGRO RESTAURADO) ---
 elif choice == "🤝 Partners (JV)":
     st.header("🤝 Gestión de Partners Mercantiles")
-    df_p = cargar_datos_seguros("PARTNERS")
+    df_p = cargar_datos_limpios("PARTNERS")
     if df_p is not None:
         st.dataframe(df_p)
         nif_sel = st.selectbox("Selecciona Partner (NIF)", df_p["NIF (ID único)"].tolist())
         d = df_p[df_p["NIF (ID único)"] == nif_sel].iloc[0]
         
-        if st.button("Generar Contrato JV Profesional Íntegro"):
-            # TEXTO LEGAL COMPLETO SIN RESÚMENES
+        if st.button("Generar Contrato JV Profesional"):
+            # TEXTO ÍNTEGRO SIN RESÚMENES
             contrato_jv = f"""
 CONTRATO DE COLABORACIÓN MERCANTIL Y REPARTO DE BENEFICIOS (JOINT VENTURE)
 
@@ -95,21 +94,20 @@ NOVENA. FIRMA DIGITAL. Formalización mediante firma digital avanzada con plena 
 """
             st.text_area("Contrato íntegro para copiar:", contrato_jv, height=600)
 
-# --- SECCIÓN 3: INVERSORES (TEXTO LEGAL ÍNTEGRO + FIX IndexError) ---
+# --- SECCIÓN 3: INVERSORES (CONTRATO ÍNTEGRO + FIX INDEXERROR) ---
 elif choice == "💰 Inversores":
     st.header("💰 Gestión de Inversores")
-    df_i = cargar_datos_seguros("INVERSORES")
+    df_i = cargar_datos_limpios("INVERSORES")
     if df_i is not None:
         st.dataframe(df_i)
         nif_inv = st.selectbox("Selecciona Inversor (NIF)", df_i.iloc[:, 0].tolist())
         
-        # SOLUCIÓN DEFINITIVA PARA image_d3da04:
+        # FIX DEFINITIVO image_d3da04: Buscamos la fila de forma segura
         filas = df_i[df_i.iloc[:, 0] == nif_inv]
         if not filas.empty:
             di = filas.iloc[0]
-            if st.button("Generar Contrato de Encargo Íntegro"):
-                # Determinamos representante por posición si los nombres de columna fallan
-                rep_inv = di[3] if len(di) > 3 else "[Nombre Representante]"
+            if st.button("Generar Contrato de Encargo Profesional"):
+                rep_inv = di[3] if len(di) > 3 else "[Representante]"
                 contrato_inv = f"""
 CONTRATO DE ENCARGO DE GESTIÓN E INVERSIÓN FISCAL
 
@@ -125,34 +123,29 @@ CUARTA. PAGO. Los honorarios se abonarán coincidiendo con el periodo de liquida
 QUINTA. RGPD. Los datos facilitados se tratarán exclusivamente para la formalización de la inversión.
 SEXTA. FIRMA. El presente encargo se formaliza mediante firma digital avanzada.
 """
-                st.text_area("Texto del Encargo completo:", contrato_inv, height=450)
-        else:
-            st.warning("Selecciona un NIF válido de la lista.")
+                st.text_area("Encargo completo para copiar:", contrato_inv, height=450)
 
-# --- SECCIÓN 4: ASESOR IA (CORRECCIÓN 404 Y ATTRIBUTEERROR) ---
+# --- SECCIÓN 4: ASESOR IA (DIAGNÓSTICO DEL 404) ---
 elif choice == "🤖 Asesor IA Fiscal":
     st.header("🤖 Consultor Inteligente Dertogest")
     
-    # CORRECCIÓN image_d3c6e3: Aseguramos que la lista 'messages' exista siempre
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
     for m in st.session_state.messages:
         with st.chat_message(m["role"]): st.markdown(m["content"])
     
-    if prompt := st.chat_input("Escribe tu duda legal aquí..."):
+    if prompt := st.chat_input("¿Qué duda legal tienes?"):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"): st.markdown(prompt)
         
         with st.chat_message("assistant"):
             try:
-                # Contexto enviado directamente para mayor compatibilidad
-                ctx = f"Eres el asesor legal de Dertogest. Experto en Tax Lease (Art 39.7 LIS). Pregunta: {prompt}"
+                # Contexto directo para máxima compatibilidad
+                ctx = f"Actúa como experto legal de Dertogest en Tax Lease (Art 39.7 LIS). Pregunta: {prompt}"
                 resultado = model.generate_content(ctx)
-                txt_resp = resultado.text
-                st.markdown(txt_resp)
-                st.session_state.messages.append({"role": "assistant", "content": txt_resp})
+                st.markdown(resultado.text)
+                st.session_state.messages.append({"role": "assistant", "content": resultado.text})
             except Exception as e:
-                # Informe de error detallado para el error 404
                 st.error(f"Error de conexión con la IA de Google: {e}.")
-                st.info("Sugerencia: Si el error es 404, comprueba en tu Google AI Studio que tu API Key está asociada a un proyecto con la 'Generative Language API' habilitada.")
+                st.info("⚠️ SUGERENCIA CRÍTICA: El error 404 suele significar que el modelo Gemini no está habilitado en tu proyecto. Entra en tu Consola de Google Cloud, busca 'Generative Language API' y asegúrate de que esté marcada como 'Habilitada' para el proyecto donde creaste tu API Key.")
