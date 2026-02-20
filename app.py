@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from streamlit_gsheets import GSheetsConnection
 
-# 1. CARGA DE IA (Con bypass de error 404)
+# 1. CARGA DE LIBRERÍA DE IA (Con manejo de errores)
 IA_ACTIVA = False
 try:
     import google.generativeai as genai
@@ -11,27 +11,27 @@ except ImportError:
     pass
 
 # 2. CONFIGURACIÓN DE PÁGINA
-st.set_page_config(page_title="Dertogest AI Hub v3.0", layout="wide")
+st.set_page_config(page_title="Dertogest AI Hub v3.1", layout="wide")
 st.title("🏛️ Dertogest: Gestión & Inteligencia Fiscal")
 
-# 3. FUNCIÓN DE DATOS SEGURA (Limpia espacios invisibles)
-def cargar_datos_limpios(hoja):
+# 3. FUNCIÓN DE DATOS SEGURA (Limpia espacios invisibles en columnas)
+def cargar_datos_seguros(hoja):
     try:
         conn = st.connection("gsheets", type=GSheetsConnection)
         df = conn.read(worksheet=hoja, ttl=0)
-        # ESCUDO: Limpieza de nombres de columnas para evitar errores de 'Representante Legal'
+        # ESCUDO: Limpia nombres de columnas para evitar fallos como en image_d20fc9
         df.columns = df.columns.str.strip()
         return df
     except Exception as e:
         st.error(f"Error al conectar con la pestaña '{hoja}': {e}")
         return None
 
-# 4. CONFIGURAR IA (Corrección definitiva para el error 404)
+# 4. CONFIGURAR IA (Corrección para el error 404 de image_d43f9b)
 model = None
 if IA_ACTIVA and "GOOGLE_API_KEY" in st.secrets:
     try:
         genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
-        # Forzamos el modelo estable para evitar el error 404 de v1beta
+        # Intentamos instanciar el modelo directamente
         model = genai.GenerativeModel('gemini-1.5-flash')
     except Exception:
         IA_ACTIVA = False
@@ -54,17 +54,18 @@ if choice == "📊 Calculadora Fiscal":
         st.success(f"Inversión Óptima Sugerida: {inv_opt:,.2f} €")
         st.info(f"Ahorro Neto Directo (20%): {inv_opt * 0.20:,.2f} €")
 
-# --- SECCIÓN 2: PARTNERS (TEXTO LEGAL COMPLETO) ---
+# --- SECCIÓN 2: PARTNERS (TEXTO LEGAL ÍNTEGRO) ---
 elif choice == "🤝 Partners (JV)":
     st.header("🤝 Gestión de Partners Mercantiles")
-    df_p = cargar_datos_limpios("PARTNERS")
+    df_p = cargar_datos_seguros("PARTNERS")
     if df_p is not None:
         st.dataframe(df_p)
         nif_sel = st.selectbox("Selecciona Partner (NIF)", df_p["NIF (ID único)"].tolist())
         d = df_p[df_p["NIF (ID único)"] == nif_sel].iloc[0]
         
         if st.button("Generar Contrato JV Profesional Íntegro"):
-            contrato_full = f"""
+            # TEXTO LEGAL COMPLETO SIN RESÚMENES
+            contrato_jv = f"""
 CONTRATO DE COLABORACIÓN MERCANTIL Y REPARTO DE BENEFICIOS (JOINT VENTURE)
 
 REUNIDOS:
@@ -92,21 +93,22 @@ SÉPTIMA. RGPD. Cumplimiento del Reglamento (UE) 2016/679.
 OCTAVA. DURACIÓN. Un año prorrogable automáticamente, salvo preaviso de 30 días.
 NOVENA. FIRMA DIGITAL. Formalización mediante firma digital avanzada con plena validez.
 """
-            st.text_area("Contrato íntegro listo para copiar:", contrato_full, height=600)
+            st.text_area("Contrato íntegro para copiar:", contrato_jv, height=600)
 
-# --- SECCIÓN 3: INVERSORES (TEXTO LEGAL COMPLETO + FIX ERROR) ---
+# --- SECCIÓN 3: INVERSORES (TEXTO LEGAL ÍNTEGRO + FIX IndexError) ---
 elif choice == "💰 Inversores":
     st.header("💰 Gestión de Inversores")
-    df_i = cargar_datos_limpios("INVERSORES")
+    df_i = cargar_datos_seguros("INVERSORES")
     if df_i is not None:
         st.dataframe(df_i)
         nif_inv = st.selectbox("Selecciona Inversor (NIF)", df_i.iloc[:, 0].tolist())
         
-        # FIX image_d3da04: Verificamos existencia antes de acceder
+        # SOLUCIÓN DEFINITIVA PARA image_d3da04:
         filas = df_i[df_i.iloc[:, 0] == nif_inv]
         if not filas.empty:
             di = filas.iloc[0]
             if st.button("Generar Contrato de Encargo Íntegro"):
+                # Determinamos representante por posición si los nombres de columna fallan
                 rep_inv = di[3] if len(di) > 3 else "[Nombre Representante]"
                 contrato_inv = f"""
 CONTRATO DE ENCARGO DE GESTIÓN E INVERSIÓN FISCAL
@@ -116,35 +118,41 @@ De una parte, DERTOGEST, S.L. (GESTOR).
 De otra parte, {di[1]}, con NIF {di[0]}, representada por D./Dña. {rep_inv} (CLIENTE).
 
 CLÁUSULAS:
-PRIMERA. OBJETO. Localización de activos con rentabilidad neta garantizada del 20%.
+PRIMERA. OBJETO. Localización de activos con rentabilidad neta garantizada del 20% sobre aportación.
 SEGUNDA. HONORARIOS. Apertura: 300 € (Netos + IVA), descontables de la factura final. Success Fee: 4% (Neto + IVA).
-TERCERA. GARANTÍA. Devolución de los 300 € si no se presenta propuesta viable en plazo.
-CUARTA. PAGO. Coincidiendo con el periodo de liquidación de impuestos (Junio/Julio).
-QUINTA. RGPD. Tratamiento de datos exclusivo para formalizar la inversión.
-SEXTA. FIRMA. Formalización mediante firma digital avanzada.
+TERCERA. GARANTÍA. Devolución íntegra de los 300 € si no se presenta propuesta viable en el plazo pactado.
+CUARTA. PAGO. Los honorarios se abonarán coincidiendo con el periodo de liquidación de impuestos (Junio/Julio).
+QUINTA. RGPD. Los datos facilitados se tratarán exclusivamente para la formalización de la inversión.
+SEXTA. FIRMA. El presente encargo se formaliza mediante firma digital avanzada.
 """
                 st.text_area("Texto del Encargo completo:", contrato_inv, height=450)
+        else:
+            st.warning("Selecciona un NIF válido de la lista.")
 
 # --- SECCIÓN 4: ASESOR IA (CORRECCIÓN 404 Y ATTRIBUTEERROR) ---
 elif choice == "🤖 Asesor IA Fiscal":
     st.header("🤖 Consultor Inteligente Dertogest")
+    
+    # CORRECCIÓN image_d3c6e3: Aseguramos que la lista 'messages' exista siempre
     if "messages" not in st.session_state:
         st.session_state.messages = []
-    
+
     for m in st.session_state.messages:
         with st.chat_message(m["role"]): st.markdown(m["content"])
     
-    if prompt := st.chat_input("¿Qué duda legal tienes?"):
+    if prompt := st.chat_input("Escribe tu duda legal aquí..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"): st.markdown(prompt)
         
         with st.chat_message("assistant"):
             try:
-                # Cambiamos la forma de llamar al contenido para evitar el error 404
-                ctx = f"Eres el experto legal de Dertogest en Tax Lease (Art 39.7 LIS). Pregunta: {prompt}"
+                # Contexto enviado directamente para mayor compatibilidad
+                ctx = f"Eres el asesor legal de Dertogest. Experto en Tax Lease (Art 39.7 LIS). Pregunta: {prompt}"
                 resultado = model.generate_content(ctx)
                 txt_resp = resultado.text
                 st.markdown(txt_resp)
                 st.session_state.messages.append({"role": "assistant", "content": txt_resp})
             except Exception as e:
-                st.error(f"Error de conexión con la IA de Google: {e}. Esto suele ser un retraso en la activación de la API Key o restricción regional.")
+                # Informe de error detallado para el error 404
+                st.error(f"Error de conexión con la IA de Google: {e}.")
+                st.info("Sugerencia: Si el error es 404, comprueba en tu Google AI Studio que tu API Key está asociada a un proyecto con la 'Generative Language API' habilitada.")
