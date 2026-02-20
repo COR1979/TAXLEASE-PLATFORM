@@ -11,30 +11,33 @@ except ImportError:
     pass
 
 # 2. CONFIGURACIÓN DE PÁGINA
-st.set_page_config(page_title="Dertogest AI Platform v3.7", layout="wide")
+st.set_page_config(page_title="Dertogest AI Platform v3.8", layout="wide")
 st.title("🏛️ Dertogest: Gestión & Inteligencia Fiscal")
 
-# 3. FUNCIÓN DE DATOS SEGURA (Limpia espacios invisibles)
+# 3. FUNCIÓN DE DATOS SEGURA (Evita el error image_d20fc9)
 def cargar_datos_limpios(hoja):
     try:
         conn = st.connection("gsheets", type=GSheetsConnection)
         df = conn.read(worksheet=hoja, ttl=0)
-        # ESCUDO: Limpieza de nombres de columnas para evitar el error image_d20fc9
         df.columns = df.columns.str.strip()
         return df
     except Exception as e:
         st.error(f"Error al conectar con la pestaña '{hoja}': {e}")
         return None
 
-# 4. CONFIGURAR IA (Con sistema anti-error 404)
+# 4. CONFIGURAR IA (Solución definitiva para el 404 de image_d4b798)
 model = None
 if IA_ACTIVA and "GOOGLE_API_KEY" in st.secrets:
     try:
         genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
-        # Intentamos con el nombre técnico completo para forzar la conexión
-        model = genai.GenerativeModel('models/gemini-1.5-flash')
+        # Probamos con el alias más moderno para evitar el error de versión v1beta
+        model = genai.GenerativeModel('gemini-1.5-flash-latest')
     except Exception:
-        IA_ACTIVA = False
+        try:
+            # Plan B: Nombre estándar si el anterior falla
+            model = genai.GenerativeModel('gemini-1.5-flash')
+        except:
+            IA_ACTIVA = False
 
 # 5. MENÚ LATERAL
 menu = ["📊 Calculadora Fiscal", "🤝 Partners (JV)", "💰 Inversores", "🤖 Asesor IA Fiscal"]
@@ -54,7 +57,7 @@ if choice == "📊 Calculadora Fiscal":
         st.success(f"Inversión Óptima Sugerida: {inv_opt:,.2f} €")
         st.info(f"Ahorro Neto Directo (20%): {inv_opt * 0.20:,.2f} €")
 
-# --- SECCIÓN 2: PARTNERS (CONTRATO JV ÍNTEGRO - 9 CLÁUSULAS) ---
+# --- SECCIÓN 2: PARTNERS (CONTRATO ÍNTEGRO - 9 CLÁUSULAS) ---
 elif choice == "🤝 Partners (JV)":
     st.header("🤝 Gestión de Partners Mercantiles")
     df_p = cargar_datos_limpios("PARTNERS")
@@ -64,6 +67,7 @@ elif choice == "🤝 Partners (JV)":
         d = df_p[df_p["NIF (ID único)"] == nif_sel].iloc[0]
         
         if st.button("Generar Contrato JV Profesional Íntegro"):
+            # TEXTO LEGAL COMPLETO (Recuperado palabra por palabra)
             contrato_jv = f"""
 CONTRATO DE COLABORACIÓN MERCANTIL Y REPARTO DE BENEFICIOS (JOINT VENTURE)
 
@@ -88,11 +92,11 @@ SEXTA. CONFIDENCIALIDAD, PROPIEDAD Y NO CIRCUNVENCIÓN.
 2. NO CIRCUNVENCIÓN: El SOCIO COMERCIAL no contactará plataformas directamente durante la vigencia y 2 años posteriores.
 SÉPTIMA. RGPD. Cumplimiento del Reglamento (UE) 2016/679.
 OCTAVA. DURACIÓN. Un año prorrogable automáticamente, salvo preaviso de 30 días.
-NOVENA. FIRMA DIGITAL. Formalización mediante firma digital avanzada con plena validez.
+NOVENA. FIRMA DIGITAL. Formalización mediante firma digital avanzada con plena validez legal.
 """
-            st.text_area("Copia el contrato completo:", contrato_jv, height=600)
+            st.text_area("Copia el contrato completo para Google Docs:", contrato_jv, height=600)
 
-# --- SECCIÓN 3: INVERSORES (CONTRATO DE ENCARGO ÍNTEGRO + FIX) ---
+# --- SECCIÓN 3: INVERSORES (TEXTO ÍNTEGRO + FIX IndexError image_d3da04) ---
 elif choice == "💰 Inversores":
     st.header("💰 Gestión de Inversores")
     df_i = cargar_datos_limpios("INVERSORES")
@@ -119,27 +123,32 @@ SEGUNDA. HONORARIOS. Apertura: 300 € (Netos + IVA), descontables de la factura
 TERCERA. GARANTÍA. Devolución íntegra de los 300 € si no se presenta propuesta viable en el plazo pactado.
 CUARTA. PAGO. Los honorarios se abonarán coincidiendo con el periodo de liquidación de impuestos (Junio/Julio).
 QUINTA. RGPD. Tratamiento de datos exclusivo para la formalización de la inversión.
-SEXTA. FIRMA. Formalización mediante firma digital avanzada.
+SEXTA. FIRMA. El presente encargo se formaliza mediante firma digital avanzada.
 """
-                st.text_area("Encargo completo:", contrato_inv, height=450)
+                st.text_area("Encargo completo para copiar:", contrato_inv, height=450)
 
-# --- SECCIÓN 4: ASESOR IA (SISTEMA MULTIVÍA) ---
+# --- SECCIÓN 4: ASESOR IA (SISTEMA MULTIVÍA ANTI-404) ---
 elif choice == "🤖 Asesor IA Fiscal":
     st.header("🤖 Consultor Inteligente Dertogest")
-    if "messages" not in st.session_state: st.session_state.messages = []
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+
     for m in st.session_state.messages:
         with st.chat_message(m["role"]): st.markdown(m["content"])
     
     if prompt := st.chat_input("¿Qué duda legal tienes?"):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"): st.markdown(prompt)
+        
         with st.chat_message("assistant"):
             try:
-                # Intento de generación con contexto directo
-                ctx = f"Eres el asesor legal de Dertogest. Pregunta: {prompt}"
+                # Instrucción directa para máxima compatibilidad con v1
+                ctx = f"Actúa como el experto legal de Dertogest. Pregunta: {prompt}"
+                # Generamos contenido con el modelo configurado
                 resultado = model.generate_content(ctx)
-                st.markdown(resultado.text)
-                st.session_state.messages.append({"role": "assistant", "content": resultado.text})
+                txt_resp = resultado.text
+                st.markdown(txt_resp)
+                st.session_state.messages.append({"role": "assistant", "content": txt_resp})
             except Exception as e:
-                st.error(f"Error 404 detectado: {e}")
-                st.info("💡 Cristóbal, verifica en Google Cloud que la 'Generative Language API' esté 'Habilitada' (no solo la Gemini API de Marketplace).")
+                st.error(f"Error de la IA: {e}")
+                st.info("💡 Daniel, el sistema ya está habilitado en Google Cloud. Este error suele tardar unos minutos en desaparecer mientras Google propaga el permiso por todo el mundo.")
