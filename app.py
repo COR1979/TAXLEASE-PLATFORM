@@ -2,45 +2,42 @@ import streamlit as st
 import pandas as pd
 from streamlit_gsheets import GSheetsConnection
 
-# 1. CARGA DE LIBRERÍAS DE IA (Con seguridad)
-IA_INSTALADA = False
+# 1. CARGA DE IA
 try:
     import google.generativeai as genai
-    IA_INSTALADA = True
+    IA_READY = True
 except ImportError:
-    pass
+    IA_READY = False
 
-# 2. CONFIGURACIÓN DE PÁGINA
+# 2. CONFIGURACIÓN
 st.set_page_config(page_title="Dertogest AI Hub", layout="wide")
 st.title("🏛️ Dertogest: Inteligencia Fiscal & Gestión")
 
-# 3. FUNCIÓN DE DATOS SEGURA (Limpia espacios invisibles como en image_d20bcf)
+# 3. FUNCIÓN DE DATOS SEGURA (Evita el error 'Representante Legal')
 def cargar_datos(hoja):
     try:
         conn = st.connection("gsheets", type=GSheetsConnection)
         df = conn.read(worksheet=hoja, ttl=0)
-        # Limpieza quirúrgica de columnas para evitar errores como image_d20fc9
-        df.columns = df.columns.str.strip()
+        df.columns = df.columns.str.strip() # Limpieza de espacios invisibles
         return df
     except Exception as e:
-        st.error(f"Error al conectar con la pestaña '{hoja}': {e}")
+        st.error(f"Error en pestaña {hoja}: {e}")
         return None
 
-# 4. CONFIGURAR IA (Con prevención de error 404 de image_d3bfbf)
-model = None
-if IA_INSTALADA and "GOOGLE_API_KEY" in st.secrets:
+# 4. CONFIGURAR IA
+if IA_READY and "GOOGLE_API_KEY" in st.secrets:
     try:
         genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
-        # Usamos el nombre de modelo estándar para evitar el error 404
+        # Usamos el nombre de modelo más estable
         model = genai.GenerativeModel('gemini-1.5-flash')
-    except Exception as e:
-        st.warning(f"Aviso: La IA no está disponible temporalmente ({e}). El resto de la App funcionará.")
+    except Exception:
+        IA_READY = False
 
-# 5. MENÚ LATERAL (RESTAURADO)
+# 5. MENÚ LATERAL
 menu = ["📊 Calculadora Fiscal", "🤝 Partners (JV)", "💰 Inversores", "🤖 Asesor IA Fiscal"]
-choice = st.sidebar.selectbox("Navegación", menu)
+choice = st.sidebar.selectbox("Menú", menu)
 
-# --- SECCIÓN 1: CALCULADORA (RESTAURADA) ---
+# --- SECCIÓN 1: CALCULADORA ---
 if choice == "📊 Calculadora Fiscal":
     st.header("🧮 Simulador de Inversión")
     c1, c2 = st.columns(2)
@@ -51,45 +48,57 @@ if choice == "📊 Calculadora Fiscal":
     inv_opt = (i * limite) / 1.20
     with c2:
         st.metric("Límite Fiscal", f"{limite*100:.0f}%")
-        st.success(f"Inversión Óptima Sugerida: {inv_opt:,.2f} €")
-        st.info(f"Ahorro Neto (20%): {inv_opt * 0.20:,.2f} €")
+        st.success(f"Inversión Óptima: {inv_opt:,.2f} €")
+        st.info(f"Beneficio Neto (20%): {inv_opt * 0.20:,.2f} €")
 
-# --- SECCIÓN 2: PARTNERS (RESTAURADA Y SEGURA) ---
+# --- SECCIÓN 2: PARTNERS ---
 elif choice == "🤝 Partners (JV)":
     st.header("Gestión de Partners")
     df_p = cargar_datos("PARTNERS")
     if df_p is not None:
         st.dataframe(df_p)
-        nif_sel = st.selectbox("Selecciona Partner (NIF)", df_p["NIF (ID único)"].tolist())
-        d = df_p[df_p["NIF (ID único)"] == nif_sel].iloc[0]
-        if st.button("Generar Borrador Contrato"):
-            # Aquí ya no fallará 'Representante Legal' gracias a la limpieza previa
+        nif = st.selectbox("Selecciona NIF", df_p["NIF (ID único)"].tolist())
+        d = df_p[df_p["NIF (ID único)"] == nif].iloc[0]
+        if st.button("Generar Borrador"):
+            # Limpieza para asegurar que 'Representante Legal' existe
             st.text_area("Contrato:", f"PARTNER: {d['Nombre Partner (Razón Social)']}\nREP: {d['Representante Legal']}\nNIF: {d['NIF (ID único)']}", height=250)
 
-# --- SECCIÓN 3: INVERSORES (RESTAURADA) ---
+# --- SECCIÓN 3: INVERSORES ---
 elif choice == "💰 Inversores":
     st.header("Gestión de Inversores")
     df_i = cargar_datos("INVERSORES")
     if df_i is not None:
         st.dataframe(df_i)
 
-# --- SECCIÓN 4: ASESOR IA (CON SOLUCIÓN AL ERROR 404) ---
+# --- SECCIÓN 4: ASESOR IA (CORREGIDO) ---
 elif choice == "🤖 Asesor IA Fiscal":
     st.header("🤖 Consultor Inteligente Dertogest")
-    if model is None:
-        st.error("La IA no está configurada correctamente en los Secrets o el modelo no responde.")
+    
+    if "GOOGLE_API_KEY" not in st.secrets:
+        st.warning("Verifica la API Key en los Secrets.")
     else:
-        if "chat_history" not in st.session_state: st.session_state.chat_history = []
-        for m in st.session_state.chat_history:
-            with st.chat_message(m["role"]): st.markdown(m["content"])
+        # CORRECCIÓN: Inicializamos 'messages' para evitar el AttributeError
+        if "messages" not in st.session_state:
+            st.session_state.messages = []
+
+        # Mostramos historial
+        for m in st.session_state.messages:
+            with st.chat_message(m["role"]):
+                st.markdown(m["content"])
         
-        if prompt := st.chat_input("¿En qué puedo ayudarte?"):
+        if prompt := st.chat_input("¿Qué duda legal tienes?"):
+            # Guardamos la pregunta del usuario
             st.session_state.messages.append({"role": "user", "content": prompt})
-            with st.chat_message("user"): st.markdown(prompt)
+            with st.chat_message("user"):
+                st.markdown(prompt)
+            
             with st.chat_message("assistant"):
                 try:
-                    # Contexto directo para evitar errores de versión
-                    response = model.generate_content(f"Actúa como experto en Tax Lease España. Pregunta: {prompt}")
+                    # Instrucción de contexto directa
+                    ctx = f"Eres experto en Tax Lease (Art. 39.7 LIS). Pregunta: {prompt}"
+                    response = model.generate_content(ctx)
                     st.markdown(response.text)
+                    # Guardamos la respuesta
+                    st.session_state.messages.append({"role": "assistant", "content": response.text})
                 except Exception as e:
-                    st.error(f"Error de conexión con la IA: {e}")
+                    st.error(f"Error en la IA: {e}")
