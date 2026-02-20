@@ -11,27 +11,28 @@ except ImportError:
     pass
 
 # 2. CONFIGURACIÓN DE PÁGINA
-st.set_page_config(page_title="Dertogest AI Platform v3.6", layout="wide")
+st.set_page_config(page_title="Dertogest AI Platform v3.7", layout="wide")
 st.title("🏛️ Dertogest: Gestión & Inteligencia Fiscal")
 
-# 3. FUNCIÓN DE DATOS SEGURA (Limpia espacios invisibles en columnas)
+# 3. FUNCIÓN DE DATOS SEGURA (Limpia espacios invisibles)
 def cargar_datos_limpios(hoja):
     try:
         conn = st.connection("gsheets", type=GSheetsConnection)
         df = conn.read(worksheet=hoja, ttl=0)
-        # ESCUDO: Limpieza de nombres de columnas para evitar fallos de 'Representante Legal'
+        # ESCUDO: Limpieza de nombres de columnas para evitar el error image_d20fc9
         df.columns = df.columns.str.strip()
         return df
     except Exception as e:
         st.error(f"Error al conectar con la pestaña '{hoja}': {e}")
         return None
 
-# 4. CONFIGURAR IA (Corrección definitiva para el error 404)
+# 4. CONFIGURAR IA (Con sistema anti-error 404)
 model = None
 if IA_ACTIVA and "GOOGLE_API_KEY" in st.secrets:
     try:
         genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        # Intentamos con el nombre técnico completo para forzar la conexión
+        model = genai.GenerativeModel('models/gemini-1.5-flash')
     except Exception:
         IA_ACTIVA = False
 
@@ -53,7 +54,7 @@ if choice == "📊 Calculadora Fiscal":
         st.success(f"Inversión Óptima Sugerida: {inv_opt:,.2f} €")
         st.info(f"Ahorro Neto Directo (20%): {inv_opt * 0.20:,.2f} €")
 
-# --- SECCIÓN 2: PARTNERS (TEXTO LEGAL ÍNTEGRO RESTAURADO) ---
+# --- SECCIÓN 2: PARTNERS (CONTRATO JV ÍNTEGRO - 9 CLÁUSULAS) ---
 elif choice == "🤝 Partners (JV)":
     st.header("🤝 Gestión de Partners Mercantiles")
     df_p = cargar_datos_limpios("PARTNERS")
@@ -62,8 +63,7 @@ elif choice == "🤝 Partners (JV)":
         nif_sel = st.selectbox("Selecciona Partner (NIF)", df_p["NIF (ID único)"].tolist())
         d = df_p[df_p["NIF (ID único)"] == nif_sel].iloc[0]
         
-        if st.button("Generar Contrato JV Profesional"):
-            # TEXTO ÍNTEGRO SIN RESÚMENES
+        if st.button("Generar Contrato JV Profesional Íntegro"):
             contrato_jv = f"""
 CONTRATO DE COLABORACIÓN MERCANTIL Y REPARTO DE BENEFICIOS (JOINT VENTURE)
 
@@ -83,18 +83,16 @@ SEGUNDA. DIVISIÓN DE FUNCIONES. DERTOGEST asume la búsqueda, auditoría técni
 TERCERA. MODELO ECONÓMICO Y IVA. Reparto al 50% de rendimientos brutos (Comisión de Origen, Setup y Success Fee). Importes en Base Imponible + IVA vigente.
 CUARTA. TRANSPARENCIA Y LIQUIDACIÓN. Pago al SOCIO COMERCIAL en un máximo de 10 días tras el cobro efectivo por parte de DERTOGEST.
 QUINTA. GARANTÍAS TÉCNICAS. Operación bajo Certificación oficial (ICAA, INAEM) y Póliza de Seguro de Contingencia Fiscal.
-
 SEXTA. CONFIDENCIALIDAD, PROPIEDAD Y NO CIRCUNVENCIÓN.
 1. PROPIEDAD DE CARTERA: DERTOGEST reconoce la propiedad exclusiva de los clientes del SOCIO COMERCIAL y se compromete formalmente a NO ofrecerles servicios de asesoría general ni cualquier gestión ajena al presente contrato de Tax Lease.
 2. NO CIRCUNVENCIÓN: El SOCIO COMERCIAL no contactará plataformas directamente durante la vigencia y 2 años posteriores.
-
 SÉPTIMA. RGPD. Cumplimiento del Reglamento (UE) 2016/679.
 OCTAVA. DURACIÓN. Un año prorrogable automáticamente, salvo preaviso de 30 días.
 NOVENA. FIRMA DIGITAL. Formalización mediante firma digital avanzada con plena validez.
 """
-            st.text_area("Contrato íntegro para copiar:", contrato_jv, height=600)
+            st.text_area("Copia el contrato completo:", contrato_jv, height=600)
 
-# --- SECCIÓN 3: INVERSORES (TEXTO ÍNTEGRO + FIX INDEXERROR image_d3da04) ---
+# --- SECCIÓN 3: INVERSORES (CONTRATO DE ENCARGO ÍNTEGRO + FIX) ---
 elif choice == "💰 Inversores":
     st.header("💰 Gestión de Inversores")
     df_i = cargar_datos_limpios("INVERSORES")
@@ -102,11 +100,11 @@ elif choice == "💰 Inversores":
         st.dataframe(df_i)
         nif_inv = st.selectbox("Selecciona Inversor (NIF)", df_i.iloc[:, 0].tolist())
         
-        # FIX DEFINITIVO image_d3da04: Buscamos la fila de forma segura
+        # FIX image_d3da04: Búsqueda segura
         filas = df_i[df_i.iloc[:, 0] == nif_inv]
         if not filas.empty:
             di = filas.iloc[0]
-            if st.button("Generar Contrato de Encargo Profesional"):
+            if st.button("Generar Contrato de Encargo Íntegro"):
                 rep_inv = di[3] if len(di) > 3 else "[Representante]"
                 contrato_inv = f"""
 CONTRATO DE ENCARGO DE GESTIÓN E INVERSIÓN FISCAL
@@ -120,33 +118,28 @@ PRIMERA. OBJETO. Localización de activos con rentabilidad neta garantizada del 
 SEGUNDA. HONORARIOS. Apertura: 300 € (Netos + IVA), descontables de la factura final. Success Fee: 4% (Neto + IVA).
 TERCERA. GARANTÍA. Devolución íntegra de los 300 € si no se presenta propuesta viable en el plazo pactado.
 CUARTA. PAGO. Los honorarios se abonarán coincidiendo con el periodo de liquidación de impuestos (Junio/Julio).
-QUINTA. RGPD. Los datos facilitados se tratarán exclusivamente para la formalización de la inversión.
-SEXTA. FIRMA. El presente encargo se formaliza mediante firma digital avanzada.
+QUINTA. RGPD. Tratamiento de datos exclusivo para la formalización de la inversión.
+SEXTA. FIRMA. Formalización mediante firma digital avanzada.
 """
-                st.text_area("Encargo completo para copiar:", contrato_inv, height=450)
+                st.text_area("Encargo completo:", contrato_inv, height=450)
 
-# --- SECCIÓN 4: ASESOR IA (CORRECCIÓN DEFINITIVA) ---
+# --- SECCIÓN 4: ASESOR IA (SISTEMA MULTIVÍA) ---
 elif choice == "🤖 Asesor IA Fiscal":
     st.header("🤖 Consultor Inteligente Dertogest")
-    
-    # Inicializamos 'messages' para evitar el AttributeError de image_d3c6e3
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
-
+    if "messages" not in st.session_state: st.session_state.messages = []
     for m in st.session_state.messages:
         with st.chat_message(m["role"]): st.markdown(m["content"])
     
     if prompt := st.chat_input("¿Qué duda legal tienes?"):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"): st.markdown(prompt)
-        
         with st.chat_message("assistant"):
             try:
-                # Contexto directo para evitar errores de versión
-                ctx = f"Actúa como experto legal de Dertogest en Tax Lease (Art 39.7 LIS). Pregunta: {prompt}"
+                # Intento de generación con contexto directo
+                ctx = f"Eres el asesor legal de Dertogest. Pregunta: {prompt}"
                 resultado = model.generate_content(ctx)
                 st.markdown(resultado.text)
                 st.session_state.messages.append({"role": "assistant", "content": resultado.text})
             except Exception as e:
-                st.error(f"Error de conexión con la IA de Google: {e}.")
-                st.info("⚠️ RECUERDA: Haz clic en 'Gemini API' bajo Marketplace en Google Cloud y pulsa 'HABILITAR'.")
+                st.error(f"Error 404 detectado: {e}")
+                st.info("💡 Cristóbal, verifica en Google Cloud que la 'Generative Language API' esté 'Habilitada' (no solo la Gemini API de Marketplace).")
