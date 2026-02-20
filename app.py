@@ -2,114 +2,116 @@ import streamlit as st
 import pandas as pd
 from streamlit_gsheets import GSheetsConnection
 
-# 1. CONFIGURACIÓN
-st.set_page_config(page_title="Dertogest Platform", layout="wide")
+# 1. CONFIGURACIÓN E INTERFAZ
+st.set_page_config(page_title="Dertogest Platform v1.0", layout="wide")
 st.title("🏛️ Dertogest: Gestión de Incentivos Fiscales")
 
-# 2. CONEXIÓN
+# 2. CONEXIÓN A GOOGLE SHEETS
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
-except Exception as e:
-    st.error("Error de configuración en Secrets.")
+except Exception:
+    st.error("Error de conexión. Revisa los 'Secrets' en Streamlit Cloud.")
 
 # 3. MENÚ
 menu = ["📊 Calculadora Fiscal", "🤝 Partners (JV)", "💰 Inversores"]
-choice = st.sidebar.selectbox("Navegación", menu)
+choice = st.sidebar.selectbox("Selecciona una sección", menu)
 
-# --- SECCIÓN 1: CALCULADORA (Igual que antes, funciona perfecto) ---
+# --- SECCIÓN 1: CALCULADORA FISCAL ---
 if choice == "📊 Calculadora Fiscal":
-    st.header("🧮 Simulador de Inversión")
-    col1, col2 = st.columns(2)
-    with col1:
-        nombre_sim = st.text_input("Nombre Cliente", "Empresa S.L.")
-        cuota = st.number_input("Cuota Íntegra (€)", value=100000)
-        factu = st.number_input("Facturación Anual (€)", value=25000000)
+    st.header("🧮 Simulador de Inversión Tax Lease")
     
-    limite = 0.15 if factu > 20000000 else 0.50
-    inv_opt = (cuota * limite) / 1.20
+    col_input, col_diag = st.columns(2)
+    with col_input:
+        st.subheader("Datos del Cliente")
+        facturacion = st.number_input("Facturación Anual de la Empresa (€)", value=11200000, step=100000)
+        cuota_is = st.number_input("Cuota Íntegra IS Inicial (€)", value=102000, step=1000)
+        meses = st.slider("Plazo de recuperación (Meses)", 1, 12, 6)
 
-    with col2:
-        st.metric("Límite Fiscal", f"{limite*100:.0f}%")
-        st.success(f"Inversión Óptima: {inv_opt:,.2f} €")
+    # Lógica fiscal según perfil
+    es_gran_empresa = facturacion > 20000000
+    limite_pct = 0.15 if es_gran_empresa else 0.50
+    perfil = "Gran Empresa (>20M€)" if es_gran_empresa else "Pyme/Empresa Estándar (<20M€)"
     
-    inv_real = st.number_input("Inversión Real (€)", value=float(inv_opt))
-    if st.button("📄 Generar Informe"):
-        # (Lógica del informe breve que ya tenías)
-        st.info("Informe generado con éxito (ver abajo).")
+    deduccion_max = cuota_is * limite_pct
+    inv_optima = deduccion_max / 1.20
 
-# --- SECCIÓN 2: PARTNERS (Generador de Contrato JV) ---
+    with col_diag:
+        st.subheader("Diagnóstico de Capacidad")
+        st.write(f"**Perfil:** {perfil}")
+        st.write(f"**Límite Legal:** {limite_pct*100:.0f}% de la cuota íntegra.")
+        st.metric("Deducción Máxima", f"{deduccion_max:,.2f} €")
+        st.success(f"🎯 Inversión Óptima Sugerida: {inv_optima:,.2f} €")
+
+    st.divider()
+    st.subheader("📉 Simulador de Impacto Final")
+    inv_real = st.number_input("Ajustar Inversión Real (€)", value=float(inv_optima))
+    
+    # Métricas de rentabilidad
+    deduccion_gen = inv_real * 1.20
+    ahorro_neto = inv_real * 0.20
+    rent_mensual = 20.0 / meses
+    tae = rent_mensual * 12
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Deducción Generada", f"{deduccion_gen:,.2f} €")
+    c2.metric("Ahorro Neto (Beneficio)", f"{ahorro_neto:,.2f} €", "↑ 20% neto")
+    c3.metric("Nueva Cuota a Pagar", f"{max(0.0, cuota_is - deduccion_gen):,.2f} €", f"-{deduccion_gen:,.2f} €", delta_color="normal")
+
+    st.info(f"Análisis Financiero: Rentabilidad Mensual del {rent_mensual:.2f}% | TAE Anualizada: {tae:.2f}%")
+
+# --- SECCIÓN 2: PARTNERS (JV) ---
 elif choice == "🤝 Partners (JV)":
-    st.header("Gestión de Partners y Contratos JV")
+    st.header("Gestión de Colaboradores Mercantiles")
     try:
-        df_p = conn.read(worksheet="PARTNERS")
-        st.dataframe(df_p, use_container_width=True)
+        # Cargamos datos según tus columnas (A: NIF, B: Nombre, C: Domicilio...)
+        df = conn.read(worksheet="PARTNERS")
+        st.dataframe(df, use_container_width=True)
         
         st.divider()
-        st.subheader("📝 Generar Contrato de Colaboración")
-        
-        # Selector de Partner basado en la primera columna (Nombre)
-        partner_nombres = df_p.iloc[:, 0].tolist()
-        seleccionado = st.selectbox("Selecciona un Partner para el contrato:", partner_nombres)
-        
-        # Extraer datos de la fila seleccionada
-        datos = df_p[df_p.iloc[:, 0] == seleccionado].iloc[0]
-        
-        if st.button("⚖️ Redactar Contrato JV"):
-            contrato_jv = f"""
-CONTRATO DE COLABORACIÓN MERCANTIL (JOINT VENTURE)
+        st.subheader("📝 Redactar Contrato JV")
+        nif_sel = st.selectbox("Selecciona Partner por NIF (ID)", df["NIF (ID único)"].tolist())
+        datos = df[df["NIF (ID único)"] == nif_sel].iloc[0]
+
+        if st.button("Generar Texto Legal JV"):
+            texto = f"""CONTRATO DE COLABORACIÓN MERCANTIL (JOINT VENTURE)
 --------------------------------------------------
 REUNIDOS:
-De una parte, DERTOGEST, S.L., con NIF B61009858 (SOCIO TÉCNICO).
-De otra parte, {datos[0]}, con NIF {datos[1]} y domicilio en {datos[2]} (SOCIO COMERCIAL).
-
-CLÁUSULAS DESTACADAS:
-1. OBJETO: Captación de inversores para proyectos Art. 39.7 LIS.
-2. REPARTO: 50% de los rendimientos brutos sobre Base Imponible (+ IVA).
-3. NO CIRCUNVENCIÓN: El Socio Comercial no contactará directamente con plataformas.
-4. PROTECCIÓN DE DATOS: Tratamiento bajo RGPD 2016/679.
-
-(Texto legal completo según borrador revisado...)
---------------------------------------------------
-"""
-            st.text_area("Contrato listo para copiar:", contrato_jv, height=400)
-            st.download_button("📥 Descargar Contrato .txt", contrato_jv, file_name=f"Contrato_JV_{seleccionado}.txt")
-
-    except Exception as e:
-        st.warning("Asegúrate de que la pestaña 'PARTNERS' tiene datos.")
-
-# --- SECCIÓN 3: INVERSORES (Generador de Contrato Encargo) ---
-elif choice == "💰 Inversores":
-    st.header("Base de Datos de Inversores")
-    try:
-        df_i = conn.read(worksheet="INVERSORES")
-        st.dataframe(df_i, use_container_width=True)
-        
-        st.divider()
-        st.subheader("📝 Generar Contrato de Encargo")
-        
-        inv_nombres = df_i.iloc[:, 0].tolist()
-        sel_inv = st.selectbox("Selecciona un Inversor:", inv_nombres)
-        datos_inv = df_i[df_i.iloc[:, 0] == sel_inv].iloc[0]
-
-        if st.button("⚖️ Redactar Contrato Inversor"):
-            contrato_inv = f"""
-CONTRATO DE ENCARGO DE GESTIÓN E INVERSIÓN FISCAL
---------------------------------------------------
-CLIENTE: {datos_inv[0]}
-NIF/CIF: {datos_inv[1]}
-GESTOR: DERTOGEST, S.L.
+De una parte, DERTOGEST, S.L., con NIF B61009858[cite: 3].
+De otra parte, {datos['Nombre Partner (Razón Social']}, con NIF {datos['NIF (ID único)']} y domicilio en {datos['Domicilio Social']}.
 
 ACUERDOS:
-1. RENTABILIDAD: Se garantiza una rentabilidad neta del 20%.
-2. HONORARIOS: 300€ Apertura + 4% Success Fee (Base Imponible + IVA).
-3. PAGO: A liquidar en el periodo impositivo (Julio/Junio).
-4. GARANTÍA: Devolución de 300€ si no hay activo disponible.
+1. REPARTO: 50% de rendimientos brutos sobre Base Imponible (+ IVA).
+2. LIQUIDACIÓN: Pago en un máximo de 10 días tras el cobro[cite: 22].
+3. NO CIRCUNVENCIÓN: Compromiso de no contactar plataformas directamente por 2 años[cite: 27].
+4. GARANTÍAS: Certificación administrativa oficial y Póliza de Seguro[cite: 24].
+--------------------------------------------------"""
+            st.text_area("Copia el contrato aquí:", texto, height=300)
+    except Exception as e:
+        st.error(f"Error al leer la hoja de Partners: {e}")
 
-(Texto legal completo según borrador revisado...)
+# --- SECCIÓN 3: INVERSORES ---
+elif choice == "💰 Inversores":
+    st.header("Gestión de Clientes Inversores")
+    try:
+        df_i = conn.read(worksheet="INVERSORES")
+        st.dataframe(df_i)
+        
+        st.divider()
+        st.subheader("📝 Redactar Contrato de Encargo")
+        nif_inv = st.selectbox("Selecciona Inversor por NIF", df_i.iloc[:, 0].tolist())
+        d_inv = df_i[df_i.iloc[:, 0] == nif_inv].iloc[0]
+
+        if st.button("Generar Texto Legal Inversor"):
+            texto_inv = f"""CONTRATO DE ENCARGO DE GESTIÓN E INVERSIÓN FISCAL
 --------------------------------------------------
-"""
-            st.text_area("Contrato listo para copiar:", contrato_inv, height=400)
-            st.download_button("📥 Descargar Contrato .txt", contrato_inv, file_name=f"Contrato_Inv_{sel_inv}.txt")
+GESTOR: DERTOGEST, S.L. [cite: 36]
+CLIENTE: {d_inv[1]} con NIF {d_inv[0]} [cite: 37]
 
-    except:
-        st.warning("Asegúrate de que la pestaña 'INVERSORES' tiene datos.")
+ACUERDOS:
+1. RENTABILIDAD: Garantizada rentabilidad neta del 20%[cite: 41].
+2. HONORARIOS: 300 € (Apertura) + 4% Success Fee (Netos + IVA).
+3. GARANTÍA: Devolución íntegra de 300 € si no hay propuesta viable[cite: 46].
+--------------------------------------------------"""
+            st.text_area("Copia el contrato aquí:", texto_inv, height=300)
+    except Exception:
+        st.warning("Pestaña 'INVERSORES' no encontrada o vacía.")
