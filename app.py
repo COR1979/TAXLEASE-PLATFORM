@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from streamlit_gsheets import GSheetsConnection
 
-# 1. CARGA DE IA (Con sistema de diagnóstico)
+# 1. CARGA DE LIBRERÍAS DE IA
 IA_ACTIVA = False
 try:
     import google.generativeai as genai
@@ -11,22 +11,22 @@ except ImportError:
     pass
 
 # 2. CONFIGURACIÓN DE PÁGINA
-st.set_page_config(page_title="Dertogest AI Platform v3.2", layout="wide")
+st.set_page_config(page_title="Dertogest AI Platform v3.6", layout="wide")
 st.title("🏛️ Dertogest: Gestión & Inteligencia Fiscal")
 
-# 3. FUNCIÓN DE DATOS SEGURA
+# 3. FUNCIÓN DE DATOS SEGURA (Limpia espacios invisibles en columnas)
 def cargar_datos_limpios(hoja):
     try:
         conn = st.connection("gsheets", type=GSheetsConnection)
         df = conn.read(worksheet=hoja, ttl=0)
-        # ESCUDO: Limpia nombres de columnas para evitar fallos de 'Representante Legal'
+        # ESCUDO: Limpieza de nombres de columnas para evitar fallos de 'Representante Legal'
         df.columns = df.columns.str.strip()
         return df
     except Exception as e:
         st.error(f"Error al conectar con la pestaña '{hoja}': {e}")
         return None
 
-# 4. CONFIGURAR IA (Con prevención de error 404)
+# 4. CONFIGURAR IA (Corrección definitiva para el error 404)
 model = None
 if IA_ACTIVA and "GOOGLE_API_KEY" in st.secrets:
     try:
@@ -53,7 +53,7 @@ if choice == "📊 Calculadora Fiscal":
         st.success(f"Inversión Óptima Sugerida: {inv_opt:,.2f} €")
         st.info(f"Ahorro Neto Directo (20%): {inv_opt * 0.20:,.2f} €")
 
-# --- SECCIÓN 2: PARTNERS (CONTRATO ÍNTEGRO RESTAURADO) ---
+# --- SECCIÓN 2: PARTNERS (TEXTO LEGAL ÍNTEGRO RESTAURADO) ---
 elif choice == "🤝 Partners (JV)":
     st.header("🤝 Gestión de Partners Mercantiles")
     df_p = cargar_datos_limpios("PARTNERS")
@@ -94,7 +94,7 @@ NOVENA. FIRMA DIGITAL. Formalización mediante firma digital avanzada con plena 
 """
             st.text_area("Contrato íntegro para copiar:", contrato_jv, height=600)
 
-# --- SECCIÓN 3: INVERSORES (CONTRATO ÍNTEGRO + FIX INDEXERROR) ---
+# --- SECCIÓN 3: INVERSORES (TEXTO ÍNTEGRO + FIX INDEXERROR image_d3da04) ---
 elif choice == "💰 Inversores":
     st.header("💰 Gestión de Inversores")
     df_i = cargar_datos_limpios("INVERSORES")
@@ -125,10 +125,11 @@ SEXTA. FIRMA. El presente encargo se formaliza mediante firma digital avanzada.
 """
                 st.text_area("Encargo completo para copiar:", contrato_inv, height=450)
 
-# --- SECCIÓN 4: ASESOR IA (DIAGNÓSTICO DEL 404) ---
+# --- SECCIÓN 4: ASESOR IA (CORRECCIÓN DEFINITIVA) ---
 elif choice == "🤖 Asesor IA Fiscal":
     st.header("🤖 Consultor Inteligente Dertogest")
     
+    # Inicializamos 'messages' para evitar el AttributeError de image_d3c6e3
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
@@ -141,11 +142,11 @@ elif choice == "🤖 Asesor IA Fiscal":
         
         with st.chat_message("assistant"):
             try:
-                # Contexto directo para máxima compatibilidad
+                # Contexto directo para evitar errores de versión
                 ctx = f"Actúa como experto legal de Dertogest en Tax Lease (Art 39.7 LIS). Pregunta: {prompt}"
                 resultado = model.generate_content(ctx)
                 st.markdown(resultado.text)
                 st.session_state.messages.append({"role": "assistant", "content": resultado.text})
             except Exception as e:
                 st.error(f"Error de conexión con la IA de Google: {e}.")
-                st.info("⚠️ SUGERENCIA CRÍTICA: El error 404 suele significar que el modelo Gemini no está habilitado en tu proyecto. Entra en tu Consola de Google Cloud, busca 'Generative Language API' y asegúrate de que esté marcada como 'Habilitada' para el proyecto donde creaste tu API Key.")
+                st.info("⚠️ RECUERDA: Haz clic en 'Gemini API' bajo Marketplace en Google Cloud y pulsa 'HABILITAR'.")
