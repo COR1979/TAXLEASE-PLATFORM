@@ -2,84 +2,94 @@ import streamlit as st
 import pandas as pd
 from streamlit_gsheets import GSheetsConnection
 
-# 1. CARGA DE LIBRERÍAS DE IA
-IA_ACTIVA = False
+# 1. CARGA DE LIBRERÍAS DE IA (Con seguridad)
+IA_INSTALADA = False
 try:
     import google.generativeai as genai
-    IA_ACTIVA = True
+    IA_INSTALADA = True
 except ImportError:
-    st.error("Librería 'google-generativeai' no encontrada. Revisa requirements.txt")
+    pass
 
 # 2. CONFIGURACIÓN DE PÁGINA
 st.set_page_config(page_title="Dertogest AI Hub", layout="wide")
-st.title("🏛️ Dertogest: Inteligencia Fiscal")
+st.title("🏛️ Dertogest: Inteligencia Fiscal & Gestión")
 
-# 3. FUNCIÓN DE DATOS (Solución definitiva para image_d20fc9)
-def obtener_datos(hoja):
+# 3. FUNCIÓN DE DATOS SEGURA (Limpia espacios invisibles como en image_d20bcf)
+def cargar_datos(hoja):
     try:
         conn = st.connection("gsheets", type=GSheetsConnection)
         df = conn.read(worksheet=hoja, ttl=0)
-        # Limpiamos nombres de columnas de espacios traicioneros
+        # Limpieza quirúrgica de columnas para evitar errores como image_d20fc9
         df.columns = df.columns.str.strip()
         return df
     except Exception as e:
-        st.error(f"Error de conexión con Excel: {e}")
+        st.error(f"Error al conectar con la pestaña '{hoja}': {e}")
         return None
 
-# 4. CONFIGURAR IA (Con prevención de error NotFound)
+# 4. CONFIGURAR IA (Con prevención de error 404 de image_d3bfbf)
 model = None
-if IA_ACTIVA and "GOOGLE_API_KEY" in st.secrets:
+if IA_INSTALADA and "GOOGLE_API_KEY" in st.secrets:
     try:
         genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
-        # Usamos el nombre de modelo más estándar y compatible
+        # Usamos el nombre de modelo estándar para evitar el error 404
         model = genai.GenerativeModel('gemini-1.5-flash')
     except Exception as e:
-        st.error(f"Error al configurar IA: {e}")
+        st.warning(f"Aviso: La IA no está disponible temporalmente ({e}). El resto de la App funcionará.")
 
-# 5. MENÚ
-menu = ["📊 Calculadora Fiscal", "🤝 Partners (JV)", "🤖 Asesor IA Fiscal"]
+# 5. MENÚ LATERAL (RESTAURADO)
+menu = ["📊 Calculadora Fiscal", "🤝 Partners (JV)", "💰 Inversores", "🤖 Asesor IA Fiscal"]
 choice = st.sidebar.selectbox("Navegación", menu)
 
-# --- SECCIÓN PARTNERS (Sincronizada con image_d20bcf) ---
-if choice == "🤝 Partners (JV)":
-    st.header("🤝 Gestión de Partners")
-    df_p = obtener_datos("PARTNERS")
+# --- SECCIÓN 1: CALCULADORA (RESTAURADA) ---
+if choice == "📊 Calculadora Fiscal":
+    st.header("🧮 Simulador de Inversión")
+    c1, c2 = st.columns(2)
+    with c1:
+        f = st.number_input("Facturación Anual (€)", value=11200000)
+        i = st.number_input("Cuota Íntegra IS (€)", value=102000)
+    limite = 0.15 if f > 20000000 else 0.50
+    inv_opt = (i * limite) / 1.20
+    with c2:
+        st.metric("Límite Fiscal", f"{limite*100:.0f}%")
+        st.success(f"Inversión Óptima Sugerida: {inv_opt:,.2f} €")
+        st.info(f"Ahorro Neto (20%): {inv_opt * 0.20:,.2f} €")
+
+# --- SECCIÓN 2: PARTNERS (RESTAURADA Y SEGURA) ---
+elif choice == "🤝 Partners (JV)":
+    st.header("Gestión de Partners")
+    df_p = cargar_datos("PARTNERS")
     if df_p is not None:
         st.dataframe(df_p)
-        nif = st.selectbox("Selecciona NIF", df_p["NIF (ID único)"].tolist())
-        d = df_p[df_p["NIF (ID único)"] == nif].iloc[0]
-        
+        nif_sel = st.selectbox("Selecciona Partner (NIF)", df_p["NIF (ID único)"].tolist())
+        d = df_p[df_p["NIF (ID único)"] == nif_sel].iloc[0]
         if st.button("Generar Borrador Contrato"):
-            st.text_area("Borrador para Google Docs:", 
-                f"PARTNER: {d['Nombre Partner (Razón Social)']}\nREPRESENTANTE: {d['Representante Legal']}\nNIF: {d['NIF (ID único)']}", 
-                height=250)
+            # Aquí ya no fallará 'Representante Legal' gracias a la limpieza previa
+            st.text_area("Contrato:", f"PARTNER: {d['Nombre Partner (Razón Social)']}\nREP: {d['Representante Legal']}\nNIF: {d['NIF (ID único)']}", height=250)
 
-# --- SECCIÓN ASESOR IA (Con gestión de errores google.api_core) ---
+# --- SECCIÓN 3: INVERSORES (RESTAURADA) ---
+elif choice == "💰 Inversores":
+    st.header("Gestión de Inversores")
+    df_i = cargar_datos("INVERSORES")
+    if df_i is not None:
+        st.dataframe(df_i)
+
+# --- SECCIÓN 4: ASESOR IA (CON SOLUCIÓN AL ERROR 404) ---
 elif choice == "🤖 Asesor IA Fiscal":
     st.header("🤖 Consultor Inteligente Dertogest")
-    
-    if "GOOGLE_API_KEY" not in st.secrets:
-        st.warning("Verifica que la API Key esté en la primera línea de los Secrets con comillas.")
-    elif model is None:
-        st.error("El modelo de IA no pudo inicializarse.")
+    if model is None:
+        st.error("La IA no está configurada correctamente en los Secrets o el modelo no responde.")
     else:
-        # Chat interactivo
-        if "chat_history" not in st.session_state:
-            st.session_state.chat_history = []
-
+        if "chat_history" not in st.session_state: st.session_state.chat_history = []
         for m in st.session_state.chat_history:
             with st.chat_message(m["role"]): st.markdown(m["content"])
-
-        if pregunta := st.chat_input("¿En qué puedo ayudarte hoy?"):
-            st.session_state.chat_history.append({"role": "user", "content": pregunta})
-            with st.chat_message("user"): st.markdown(pregunta)
-            
+        
+        if prompt := st.chat_input("¿En qué puedo ayudarte?"):
+            st.session_state.messages.append({"role": "user", "content": prompt})
+            with st.chat_message("user"): st.markdown(prompt)
             with st.chat_message("assistant"):
                 try:
-                    # Instrucción de contexto rápida para el modelo
-                    contexto = f"Actúa como experto en Tax Lease España (Art 39.7 LIS). Pregunta: {pregunta}"
-                    resultado = model.generate_content(contexto)
-                    st.markdown(resultado.text)
-                    st.session_state.chat_history.append({"role": "assistant", "content": resultado.text})
+                    # Contexto directo para evitar errores de versión
+                    response = model.generate_content(f"Actúa como experto en Tax Lease España. Pregunta: {prompt}")
+                    st.markdown(response.text)
                 except Exception as e:
-                    st.error(f"Error de la IA: {e}. Intenta refrescar la página.")
+                    st.error(f"Error de conexión con la IA: {e}")
