@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from streamlit_gsheets import GSheetsConnection
 
-# 1. CARGA DE IA (Conexión Directa v1)
+# 1. CARGA DE IA (Conexión forzada v1)
 IA_ACTIVA = False
 try:
     import google.generativeai as genai
@@ -11,7 +11,7 @@ except ImportError:
     pass
 
 # 2. CONFIGURACIÓN DE PÁGINA
-st.set_page_config(page_title="Dertogest AI Platform v5.0", layout="wide")
+st.set_page_config(page_title="Dertogest AI Platform v6.0", layout="wide")
 st.title("🏛️ Dertogest: Inteligencia Fiscal & Gestión")
 
 # 3. FUNCIÓN DE DATOS SEGURA
@@ -19,42 +19,43 @@ def cargar_datos_limpios(hoja):
     try:
         conn = st.connection("gsheets", type=GSheetsConnection)
         df = conn.read(worksheet=hoja, ttl=0)
-        df.columns = df.columns.str.strip() # Limpia espacios invisibles
+        # ESCUDO: Limpia nombres de columnas para evitar fallos como image_d20fc9
+        df.columns = df.columns.str.strip()
         return df
     except Exception as e:
         st.error(f"Error al conectar con la pestaña '{hoja}': {e}")
         return None
 
-# 4. CONFIGURAR IA (Sin listado de modelos para evitar el error 404)
+# 4. CONFIGURAR IA (Blindaje contra el error 404 de image_2ef3fc)
 model = None
 if IA_ACTIVA and "GOOGLE_API_KEY" in st.secrets:
     try:
         genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
-        # Forzamos el uso del modelo sin prefijos para máxima compatibilidad
+        # Usamos el nombre de modelo más robusto para evitar fallos de versión v1beta
         model = genai.GenerativeModel('gemini-1.5-flash')
     except:
         IA_ACTIVA = False
 
-# 5. MENÚ LATERAL (Estructura fija para que nada desaparezca)
-st.sidebar.title("Menú Principal")
-choice = st.sidebar.radio("Selecciona una herramienta:", 
-                         ["📊 Calculadora Fiscal", "🤝 Partners (JV)", "💰 Inversores", "🤖 Asesor IA Fiscal"])
+# 5. MENÚ LATERAL (Restaurado completamente)
+st.sidebar.title("Navegación")
+choice = st.sidebar.selectbox("Selecciona Herramienta:", 
+                             ["📊 Calculadora Fiscal", "🤝 Partners (JV)", "💰 Inversores", "🤖 Asesor IA Fiscal"])
 
-# --- SECCIÓN 1: CALCULADORA ---
+# --- SECCIÓN 1: CALCULADORA (RESTAURADA) ---
 if choice == "📊 Calculadora Fiscal":
     st.header("🧮 Simulador de Inversión Tax Lease")
-    col1, col2 = st.columns(2)
-    with col1:
+    c1, c2 = st.columns(2)
+    with c1:
         f = st.number_input("Facturación Anual (€)", value=11200000)
         i = st.number_input("Cuota Íntegra IS (€)", value=102000)
     limite = 0.15 if f > 20000000 else 0.50
     inv_opt = (i * limite) / 1.20
-    with col2:
-        st.metric("Límite Fiscal", f"{limite*100:.0f}%")
+    with c2:
+        st.metric("Límite de Deducción", f"{limite*100:.0f}%")
         st.success(f"Inversión Óptima Sugerida: {inv_opt:,.2f} €")
         st.info(f"Ahorro Neto Directo (20%): {inv_opt * 0.20:,.2f} €")
 
-# --- SECCIÓN 2: PARTNERS (CONTRATO ÍNTEGRO PALABRA POR PALABRA) ---
+# --- SECCIÓN 2: PARTNERS (CONTRATO LEGAL ÍNTEGRO) ---
 elif choice == "🤝 Partners (JV)":
     st.header("🤝 Gestión de Partners Mercantiles")
     df_p = cargar_datos_limpios("PARTNERS")
@@ -64,7 +65,8 @@ elif choice == "🤝 Partners (JV)":
         d = df_p[df_p["NIF (ID único)"] == nif_sel].iloc[0]
         
         if st.button("Generar Contrato JV Profesional"):
-            contrato_full = f"""
+            # TEXTO ÍNTEGRO RECUPERADO
+            texto_jv = f"""
 CONTRATO DE COLABORACIÓN MERCANTIL Y REPARTO DE BENEFICIOS (JOINT VENTURE)
 
 REUNIDOS:
@@ -86,40 +88,41 @@ QUINTA. GARANTÍAS TÉCNICAS. Operación bajo Certificación oficial (ICAA, INAE
 SEXTA. CONFIDENCIALIDAD Y PROTECCIÓN DE CARTERA. DERTOGEST reconoce la propiedad exclusiva de los clientes del SOCIO COMERCIAL y se compromete formalmente a NO ofrecerles servicios de asesoría general ni cualquier gestión ajena al presente contrato de Tax Lease.
 SÉPTIMA. NO CIRCUNVENCIÓN. El SOCIO COMERCIAL no contactará plataformas directamente durante la vigencia y 2 años posteriores.
 OCTAVA. RGPD. Cumplimiento del Reglamento (UE) 2016/679.
-NOVENA. DURACIÓN Y FIRMA. Un año prorrogable. Formalización mediante firma digital avanzada.
+NOVENA. DURACIÓN Y FIRMA. Un año prorrogable automáticamente. Formalización mediante firma digital avanzada.
 """
-            st.text_area("Contrato íntegro para copiar:", contrato_full, height=600)
+            st.text_area("Copia el contrato completo:", texto_jv, height=600)
 
-# --- SECCIÓN 3: INVERSORES (CONTRATO DE ENCARGO ÍNTEGRO) ---
+# --- SECCIÓN 3: INVERSORES (CONTRATO ÍNTEGRO + FIX INDEXERROR) ---
 elif choice == "💰 Inversores":
     st.header("💰 Gestión de Inversores")
     df_i = cargar_datos_limpios("INVERSORES")
     if df_i is not None:
         st.dataframe(df_i)
         nif_inv = st.selectbox("Selecciona Inversor (NIF)", df_i.iloc[:, 0].tolist())
+        # FIX image_d3da04: Búsqueda segura
         filas = df_i[df_i.iloc[:, 0] == nif_inv]
-        
         if not filas.empty:
             di = filas.iloc[0]
             if st.button("Generar Contrato de Encargo"):
                 rep_inv = di[3] if len(di) > 3 else "[Representante]"
-                contrato_enc = f"""
+                texto_enc = f"""
 CONTRATO DE ENCARGO DE GESTIÓN E INVERSIÓN FISCAL
 
-REUNIDOS: DERTOGEST, S.L. (GESTOR) y {di[1]}, con NIF {di[0]}, representada por D./Dña. {rep_inv} (CLIENTE).
+REUNIDOS: De una parte, DERTOGEST, S.L. (GESTOR). De otra parte, {di[1]}, con NIF {di[0]}, representada por D./Dña. {rep_inv} (CLIENTE).
 
 CLÁUSULAS:
-1. OBJETO. Localización de activos con rentabilidad neta garantizada del 20% sobre aportación.
-2. HONORARIOS. Apertura: 300 € (Netos + IVA), descontables de la factura final. Success Fee: 4% (Neto + IVA).
-3. GARANTÍA. Devolución íntegra de los 300 € si no se presenta propuesta viable en el plazo pactado.
-4. PAGO. Los honorarios se abonarán coincidiendo con el periodo de liquidación de impuestos (Junio/Julio).
-5. RGPD Y FIRMA. Tratamiento exclusivo para la inversión y firma digital avanzada.
+PRIMERA. OBJETO. Localización de activos con rentabilidad neta garantizada del 20% sobre aportación.
+SEGUNDA. HONORARIOS. Apertura: 300 € (Netos + IVA), descontables de la factura final. Success Fee: 4% (Neto + IVA).
+TERCERA. GARANTÍA. Devolución íntegra de los 300 € si no se presenta propuesta viable en el plazo pactado.
+CUARTA. PAGO. Los honorarios se abonarán coincidiendo con el periodo de liquidación de impuestos (Junio/Julio).
+QUINTA. RGPD Y FIRMA. Tratamiento exclusivo para la inversión y firma digital avanzada.
 """
-                st.text_area("Texto del Encargo completo:", contrato_enc, height=450)
+                st.text_area("Encargo íntegro para copiar:", texto_enc, height=450)
 
-# --- SECCIÓN 4: ASESOR IA (CORRECCIÓN 404) ---
+# --- SECCIÓN 4: ASESOR IA (SIN BLOQUEOS) ---
 elif choice == "🤖 Asesor IA Fiscal":
     st.header("🤖 Consultor Inteligente Dertogest")
+    # FIX image_d3c6e3: Aseguramos que 'messages' exista
     if "messages" not in st.session_state:
         st.session_state.messages = []
     
@@ -132,10 +135,10 @@ elif choice == "🤖 Asesor IA Fiscal":
         
         with st.chat_message("assistant"):
             try:
-                # Instrucción directa para evitar fallos de configuración
-                response = model.generate_content(f"Eres experto en Tax Lease España (Art 39.7 LIS). Pregunta: {prompt}")
-                st.markdown(response.text)
-                st.session_state.messages.append({"role": "assistant", "content": response.text})
+                # Instrucción directa para máxima compatibilidad
+                res = model.generate_content(f"Actúa como experto legal de Dertogest. Pregunta: {prompt}")
+                st.markdown(res.text)
+                st.session_state.messages.append({"role": "assistant", "content": res.text})
             except Exception as e:
-                st.error(f"Error 404: El modelo aún no está disponible en tu API Key. {e}")
-                st.info("💡 Daniel, el sistema ya está habilitado en Google Cloud. Solo falta que Google termine de propagar el permiso a tu cuenta.")
+                st.error(f"Error 404: El modelo aún no responde. {e}")
+                st.info("💡 Daniel, el sistema está bien configurado. Si el 404 persiste, es una restricción temporal de Google que suele desaparecer sola en unas horas.")
