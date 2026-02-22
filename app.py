@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from streamlit_gsheets import GSheetsConnection
 
-# 1. IA: PERSONALIDAD BLINDADA (Art. 39.7 LIS + Matiz Estimación Directa)
+# 1. IA: PERSONALIDAD BLINDADA (Matiz Tcnico Directa vs Mdulos)
 IA_ACTIVA = False
 model = None
 try:
@@ -11,20 +11,22 @@ try:
         genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
         available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
         if available_models:
+            # INSTRUCCIONES DE SISTEMA: El cerebro de Dertogest
             instrucciones = (
                 "Eres el Asesor Senior de DERTOGEST. Tu base legal es el ARTÍCULO 39.7 LIS. "
-                "CRITERIO TÉCNICO: La inversión es apta para sociedades (IS) y personas físicas (IRPF). "
-                "REQUISITO SINE QUA NON: En IRPF, el inversor DEBE tributar en ESTIMACIÓN DIRECTA "
-                "(ya sea Normal o Simplificada). Los contribuyentes en ESTIMACIÓN OBJETIVA (Módulos) "
-                "quedan excluidos. No hables de barcos ni de AIEs antiguas. Centrado en el 20% de beneficio."
+                "CRITERIO TÉCNICO SOBRE PERSONAS FÍSICAS (IRPF): "
+                "1. REQUISITO SINE QUA NON: El inversor DEBE estar en ESTIMACIÓN DIRECTA (Normal o Simplificada). "
+                "2. PROHIBICIÓN: Los contribuyentes en ESTIMACIÓN OBJETIVA (Módulos) NO pueden ser inversores. "
+                "3. BENEFICIO: El ahorro fiscal es un 20% neto sobre la inversión. "
+                "Sé directo, profesional y no menciones estructuras antiguas como las AIEs mar timas."
             )
             model = genai.GenerativeModel(model_name=available_models[0], system_instruction=instrucciones)
             IA_ACTIVA = True
 except Exception:
     IA_ACTIVA = False
 
-# 2. CONFIGURACIÓN
-st.set_page_config(page_title="Dertogest Platform v10.0", layout="wide")
+# 2. CONFIGURACIÓN DE PÁGINA
+st.set_page_config(page_title="Dertogest Platform v11.0", layout="wide")
 st.title("🏛️ Dertogest: Inteligencia Fiscal")
 
 def cargar_datos(hoja):
@@ -38,7 +40,7 @@ def cargar_datos(hoja):
 # 3. MENÚ LATERAL
 choice = st.sidebar.selectbox("Herramientas", ["📊 Calculadora Fiscal", "🤝 Partners (JV)", "💰 Inversores", "🤖 Asesor IA Fiscal"])
 
-# --- SECCIÓN 1: CALCULADORA (RESTAURADA) ---
+# --- SECCIÓN 1: CALCULADORA (INFORMATIVA Y PRECISA) ---
 if choice == "📊 Calculadora Fiscal":
     st.header("🧮 Simulador de Inversión")
     col1, col2 = st.columns(2)
@@ -46,22 +48,24 @@ if choice == "📊 Calculadora Fiscal":
         f = st.number_input("Facturación Anual (€)", value=11200000)
         i = st.number_input("Cuota IS / IRPF (€)", value=120000)
     
+    # Lógica de límites según facturación
     limite = 0.15 if f > 20000000 else 0.50
     inv_opt = (i * limite) / 1.20
     
     with col2:
-        st.metric("Límite Fiscal Aplicable", f"{limite*100:.0f}%")
-        st.success(f"Inversión Óptima: {inv_opt:,.2f} €")
+        st.metric("Límite de Deducción", f"{limite*100:.0f}%")
+        st.success(f"Inversión Óptima Sugerida: {inv_opt:,.2f} €")
         st.info(f"Ahorro Neto (20%): {inv_opt * 0.20:,.2f} €")
+        st.caption("Nota: El ahorro del 20% se genera por la diferencia entre la aportación y la deducción fiscal recibida.")
 
 # --- SECCIÓN 2: PARTNERS (CONTRATO ÍNTEGRO DE 9 CLÁUSULAS) ---
 elif choice == "🤝 Partners (JV)":
     st.header("🤝 Gestión de Partners Mercantiles")
-    df = cargar_datos("PARTNERS")
-    if df is not None:
-        st.dataframe(df)
-        nif = st.selectbox("Partner (NIF)", df["NIF (ID único)"].tolist())
-        d = df[df["NIF (ID único)"] == nif].iloc[0]
+    df_p = cargar_datos("PARTNERS")
+    if df_p is not None:
+        st.dataframe(df_p)
+        nif = st.selectbox("Selecciona Partner (NIF)", df_p["NIF (ID único)"].tolist())
+        d = df_p[df_p["NIF (ID único)"] == nif].iloc[0]
         
         if st.button("Generar Contrato"):
             texto_jv = f"""
@@ -79,35 +83,47 @@ CUARTA. LIQUIDACIÓN. Pago al Socio Comercial en máximo 10 días tras el cobro.
 QUINTA. PROTECCIÓN DE CARTERA. DERTOGEST se compromete a NO ofrecer servicios de asesoría general ni gestiones ajenas al Tax Lease a los clientes del Socio Comercial.
 SEXTA. NO CIRCUNVENCIÓN. Prohibición de contacto directo con plataformas por 2 años.
 SÉPTIMA. RGPD. Cumplimiento del Reglamento (UE) 2016/679.
-OCTAVA. DURACIÓN. Un año prorrogable.
+OCTAVA. DURACIÓN. Un año prorrogable automáticamente.
 NOVENA. FIRMA DIGITAL. Validez mediante firma digital avanzada.
 """
             st.text_area("Contrato Completo:", texto_jv, height=600)
 
-# --- SECCIÓN 3: INVERSORES ---
+# --- SECCIÓN 3: INVERSORES (CONTROL DE ERRORES) ---
 elif choice == "💰 Inversores":
     st.header("💰 Gestión de Inversores")
     df_inv = cargar_datos("INVERSORES")
-    if df_inv is None or df_inv.empty:
-        st.warning("No hay inversores registrados actualmente.")
+    
+    if df_inv is None or df_inv.empty or df_inv.iloc[:, 0].isnull().all():
+        st.warning("Aún no hay inversores en el Excel. Cuando los añadas, aparecerán aquí para generar sus encargos.")
     else:
         st.dataframe(df_inv)
         nif_i = st.selectbox("Inversor (NIF)", df_inv.iloc[:, 0].tolist())
         datos_i = df_inv[df_inv.iloc[:, 0] == nif_i]
+        
         if not datos_i.empty:
             di = datos_i.iloc[0]
-            if st.button("Generar Encargo"):
-                rep = di[3] if len(di) > 3 else "[Representante]"
-                st.text_area("Encargo Completo:", f"CONTRATO ENCARGO: DERTOGEST y {di[1]} (NIF {di[0]}). Rentabilidad: 20%. Honorarios: 300€ + 4% Éxito.", height=400)
+            if st.button("Generar Encargo Profesional"):
+                rep = di[3] if len(di) > 3 else "[Nombre del Representante]"
+                encargo = f"""
+CONTRATO DE ENCARGO DE GESTIÓN E INVERSIÓN FISCAL
 
-# --- SECCIÓN 4: IA (CON LA VERDAD TÉCNICA) ---
+REUNIDOS: DERTOGEST, S.L. (GESTOR) y {di[1]}, con NIF {di[0]}, representada por D./Dña. {rep} (CLIENTE).
+
+CLÁUSULAS:
+1. OBJETO. Localización de activos con rentabilidad neta del 20% sobre aportación.
+2. HONORARIOS. Apertura: 300 € (Netos + IVA). Success Fee: 4% (Neto + IVA).
+3. GARANTÍA. Devolución de los 300 € si no se presenta propuesta viable.
+"""
+                st.text_area("Texto del Encargo:", encargo, height=400)
+
+# --- SECCIÓN 4: ASESOR IA (MATIZ TÉCNICO) ---
 elif choice == "🤖 Asesor IA Fiscal":
     st.header("🤖 Consultor Senior Dertogest")
     if "messages" not in st.session_state: st.session_state.messages = []
     for m in st.session_state.messages:
         with st.chat_message(m["role"]): st.markdown(m["content"])
     
-    if prompt := st.chat_input("¿Qué duda técnica tienes sobre el Art. 39.7 LIS?"):
+    if prompt := st.chat_input("Consulta técnica sobre Estimación Directa..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"): st.markdown(prompt)
         with st.chat_message("assistant"):
@@ -116,4 +132,7 @@ elif choice == "🤖 Asesor IA Fiscal":
                 st.markdown(res.text)
                 st.session_state.messages.append({"role": "assistant", "content": res.text})
             except Exception as e:
-                st.error(f"Error: {e}")
+                if "429" in str(e):
+                    st.error("Cuota agotada temporalmente. Espera 60 segundos para volver a preguntar.")
+                else:
+                    st.error(f"Error: {e}")
